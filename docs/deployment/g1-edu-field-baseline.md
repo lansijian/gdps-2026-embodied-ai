@@ -77,36 +77,42 @@
 
 原始输出保存在 `logs/g1-topics/ros2-topic-list-20261016.txt`（gitignored）。
 
-### 3.1 激光雷达与感知（DISCOVERED）
+### 3.1 激光雷达与感知
 
-| Topic | 类型 | 备注 |
-|---|---|---|
-| `/utlidar/cloud_livox_mid360` | `sensor_msgs/msg/PointCloud2` | MID-360 点云，**需验证频率/frame_id/有效点数** |
-| `/utlidar/imu_livox_mid360` | `sensor_msgs/msg/Imu` | MID-360 IMU |
-| `/utlidar/range_info` | `geometry_msgs/msg/PointStamped` | 距离信息 |
-| `/collision_clouds` `/pre_collision_clouds` | `PointCloud2` | 厂商碰撞点云分类 |
-| `/safe_clouds` `/pre_safe_clouds` `/warning_clouds` `/no_warning_clouds` | `PointCloud2` | 厂商安全/警告分级点云 |
-| `/grid_clouds` `/ele_clouds` | `PointCloud2` | 栅格/高程点云 |
+| Topic | 类型 | 状态 | 备注 |
+|---|---|---|---|
+| `/utlidar/cloud_livox_mid360` | `sensor_msgs/msg/PointCloud2` | **CONFIRMED** | MID-360 点云，**约 10 Hz**，持续收到真实消息 |
+| `/utlidar/imu_livox_mid360` | `sensor_msgs/msg/Imu` | DISCOVERED | MID-360 IMU |
+| `/utlidar/range_info` | `geometry_msgs/msg/PointStamped` | DISCOVERED | 距离信息 |
+| `/collision_clouds` `/pre_collision_clouds` | `PointCloud2` | DISCOVERED | 厂商碰撞点云分类 |
+| `/safe_clouds` `/pre_safe_clouds` `/warning_clouds` `/no_warning_clouds` | `PointCloud2` | DISCOVERED | 厂商安全/警告分级点云 |
+| `/grid_clouds` `/ele_clouds` | `PointCloud2` | DISCOVERED | 栅格/高程点云 |
 
-**关键差异**：真机**没有** `/scan_raw` 或 `/scan`（LaserScan）。现有 `scan_restamper_node` 订阅 `/scan_raw` 将收不到数据。需要 PointCloud2 → LaserScan 转换。
+**关键差异**：真机**没有** `/scan_raw` 或 `/scan`（LaserScan）。已实现 `pointcloud_to_laserscan` 节点将 MID-360 点云转为 `/scan`。frame_id 待从实际点云消息确认。
 
-### 3.2 里程计与 SLAM（DISCOVERED）
+### 3.2 里程计与 SLAM
 
-| Topic | 类型 | 备注 |
-|---|---|---|
-| `/dog_odom` | `nav_msgs/msg/Odometry` | 厂商里程计，**需比较后选型** |
-| `/state_estimator/fusion_odom` | `Odometry` | 融合里程计 |
-| `/unitree_slam/high_rate_odometry` | `Odometry` | SLAM 高速里程计 |
-| `/unitree/slam_mapping/odom` | `Odometry` | 建图里程计 |
-| `/unitree/slam_relocation/odom` | `Odometry` | 重定位里程计 |
-| `/unitree/slam_mapping/points` | `PointCloud2` | 建图点云 |
-| `/unitree/slam_relocation/points` | `PointCloud2` | 重定位点云 |
-| `/unitree/slam_relocation/global_map` | `PointCloud2` | 全局地图点云 |
-| `/global_map` | `nav_msgs/msg/OccupancyGrid` | 栅格地图 |
-| `/unitree_slam/waypoints` | `std_msgs/msg/String` | 航点 |
-| `/slam_info` `/slam_key_info` | `String` | SLAM 状态 |
+| Topic | 类型 | 状态 | 备注 |
+|---|---|---|---|
+| `/dog_odom` | `nav_msgs/msg/Odometry` | **CONFIRMED** | **约 1000 Hz**，frame_id=`odom`，child_frame_id=`robot_center`。**选为局部导航里程计** |
+| `/state_estimator/fusion_odom` | `Odometry` | UNVERIFIED | 上轮检查 0 publisher |
+| `/unitree_slam/high_rate_odometry` | `Odometry` | **BLOCKED** | **0 个 Publisher**，不可用 |
+| `/unitree/slam_mapping/odom` | `Odometry` | DISCOVERED | 1 个 Publisher（RELIABLE），持续发布待验证 |
+| `/unitree/slam_relocation/odom` | `Odometry` | DISCOVERED | 1 个 Publisher（RELIABLE），暂未观察到实际消息 |
+| `/unitree/slam_mapping/points` | `PointCloud2` | DISCOVERED | 建图点云 |
+| `/unitree/slam_relocation/points` | `PointCloud2` | DISCOVERED | 重定位点云 |
+| `/unitree/slam_relocation/global_map` | `PointCloud2` | DISCOVERED | 全局地图点云 |
+| `/global_map` | `nav_msgs/msg/OccupancyGrid` | DISCOVERED | 1 个 Publisher，地图实际内容待验证 |
+| `/unitree_slam/waypoints` | `std_msgs/msg/String` | DISCOVERED | 航点 |
+| `/slam_info` `/slam_key_info` | `String` | DISCOVERED | SLAM 状态 |
 
-**待验证**：比较各 odom 的频率、坐标系、时间戳、姿态连续性，选出导航输入。`/global_map` 若有效可复用，减少重复建图。
+**选型结论**：`/dog_odom`（1000 Hz，`odom`→`robot_center`）为当前最可靠的局部里程计。SLAM 两路 odom 有 publisher 但数据未确认，`high_rate_odometry` 无 publisher 不可用。
+
+### 3.2.1 TF 状态（BLOCKED → 方案确定）
+
+- `/tf`、`/tf_static`：**未发现**，厂商未发布标准 TF。
+- **方案**：通过 `odom_tf` 节点从 `/dog_odom` 真实消息派生 `odom`→`robot_center` TF。此为数据派生，非伪造。
+- `map`→`odom` 变换：待厂商 SLAM 重定位验证后确定来源，**当前不发布**。
 
 ### 3.3 高层运动接口（DISCOVERED）
 
@@ -165,14 +171,24 @@ backend: mock
 
 ---
 
-## 5. 下一步验证项（UNVERIFIED）
+## 5. 构建与验收状态
 
-1. MID-360 是否持续发布实时数据（频率、frame_id、点数量）。
-2. `/dog_odom` 是否正常，与其他 odom 比较选型。
-3. SLAM 与 `/global_map` 是否有有效发布者。
-4. TF 是否实际存在（`/tf` `/tf_static`）。
-5. `/api/sport/request` 的 publisher、QoS、API ID。
-6. `unitree_sdk2py` 是否可导入，`LocoClient` 接口签名。
+### Level 1：Foxy 编译（CONFIRMED ✅）
+
+- `colcon build --symlink-install --packages-select gdps_g1_navigation`
+- 结果：`Finished <<< gdps_g1_navigation [1.91s]`，`Summary: 1 package finished [2.38s]`
+- 6 个导航可执行节点已注册。
+- 部署路径：`/home/unitree/gdps-2026-embodied-ai`
+
+### 下一步验证项（UNVERIFIED）
+
+1. MID-360 点云 frame_id、有效点数、高度分布（确认转换参数）。
+2. `/dog_odom` 时间戳连续性、位姿漂移评估。
+3. `/global_map` 实际地图内容（frame、分辨率、有效栅格）。
+4. 厂商 SLAM 服务是否激活，能否复用全局定位。
+5. `odom_tf` 节点派生 `odom`→`robot_center` TF 验证。
+6. `/scan` 真实输出与障碍物检测 Dry-run。
+7. `/api/sport/request` 的 API ID、权限、FSM 兼容（live 前）。
 
 执行脚本：`bash scripts/g1/sensor_diag.sh`（机载只读，不发运动）。
 

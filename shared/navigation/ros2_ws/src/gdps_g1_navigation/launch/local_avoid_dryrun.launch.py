@@ -1,7 +1,9 @@
 """Local avoidance dry-run on real G1 EDU sensors. Does not start Nav2 or live motion.
 
 Pipeline:
-  /utlidar/cloud_livox_mid360 (PointCloud2)
+  /dog_odom (Odometry, 1000Hz, frame_id=odom, child=robot_center)
+    -> gdps_odom_tf -> broadcasts odom -> robot_center TF (data-derived, not faked)
+  /utlidar/cloud_livox_mid360 (PointCloud2, ~10Hz)
     -> gdps_pointcloud_to_laserscan -> /scan (LaserScan)
     -> gdps_local_navigator (SharedNavigator, dry-run + mock backend)
 """
@@ -13,6 +15,13 @@ from launch_ros.actions import Node
 def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
+            Node(
+                package="gdps_g1_navigation",
+                executable="odom_tf",
+                name="gdps_odom_tf",
+                output="screen",
+                parameters=[{"odom_topic": "/dog_odom"}],
+            ),
             Node(
                 package="gdps_g1_navigation",
                 executable="pointcloud_to_laserscan",
