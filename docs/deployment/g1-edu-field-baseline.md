@@ -81,14 +81,38 @@
 
 | Topic | 类型 | 状态 | 备注 |
 |---|---|---|---|
-| `/utlidar/cloud_livox_mid360` | `sensor_msgs/msg/PointCloud2` | **CONFIRMED** | MID-360 点云，**约 10 Hz**，持续收到真实消息 |
+| `/utlidar/cloud_livox_mid360` | `sensor_msgs/msg/PointCloud2` | **CONFIRMED** | MID-360 点云，**约 10 Hz**，frame_id=`livox_frame`，point_step=22，~20064 点/帧 |
 | `/utlidar/imu_livox_mid360` | `sensor_msgs/msg/Imu` | DISCOVERED | MID-360 IMU |
 | `/utlidar/range_info` | `geometry_msgs/msg/PointStamped` | DISCOVERED | 距离信息 |
 | `/collision_clouds` `/pre_collision_clouds` | `PointCloud2` | DISCOVERED | 厂商碰撞点云分类 |
 | `/safe_clouds` `/pre_safe_clouds` `/warning_clouds` `/no_warning_clouds` | `PointCloud2` | DISCOVERED | 厂商安全/警告分级点云 |
 | `/grid_clouds` `/ele_clouds` | `PointCloud2` | DISCOVERED | 栅格/高程点云 |
+| `/scan` | `sensor_msgs/msg/LaserScan` | **CONFIRMED** | 由 `pointcloud_to_laserscan` 节点本地转换产生，**frame_id=`livox_frame`**，360 桶，有效桶 ~310 |
 
-**关键差异**：真机**没有** `/scan_raw` 或 `/scan`（LaserScan）。已实现 `pointcloud_to_laserscan` 节点将 MID-360 点云转为 `/scan`。frame_id 待从实际点云消息确认。
+**MID-360 点云字段（CONFIRMED）**：
+
+| 字段 | offset | 类型 |
+|---|---|---|
+| x | 0 | float32 |
+| y | 4 | float32 |
+| z | 8 | float32 |
+| intensity | 12 | float32 |
+| ring | 16 | uint16 |
+| time | 18 | float32 |
+
+**LaserScan 转换实测（CONFIRMED）**：
+
+| 项 | 值 |
+|---|---|
+| 角度桶数 | 360（angle_increment ≈ 0.0175 rad） |
+| 有效桶/帧 | 308、314、317（连续三帧） |
+| +X 方向 ±30° 最近 | 0.924m、0.911m、0.918m |
+| global_min | ~0.300m（恰好接近 robot_radius 边界，已通过 robot_radius=0.35 + `<=` 过滤修正） |
+| 转换前频率 | 点云 ~10 Hz |
+| 转换后频率（旧版纯 Python） | ~5.7 Hz（瓶颈：逐点 Python 循环） |
+| 转换后频率（新版 numpy 向量化） | 待现场验证（预计 ~10 Hz） |
+
+**关键差异**：真机**没有**原生 `/scan`（LaserScan）。已实现 `pointcloud_to_laserscan` 节点将 MID-360 点云转为 `/scan`。注意 `livox_frame` 与 `robot_center` 的外参尚未确认，不能假设雷达 +X = 机器人前方。
 
 ### 3.2 里程计与 SLAM
 
@@ -104,9 +128,10 @@
 | `/unitree/slam_relocation/global_map` | `PointCloud2` | DISCOVERED | 全局地图点云 |
 | `/global_map` | `nav_msgs/msg/OccupancyGrid` | DISCOVERED | 1 个 Publisher，地图实际内容待验证 |
 | `/unitree_slam/waypoints` | `std_msgs/msg/String` | DISCOVERED | 航点 |
-| `/slam_info` `/slam_key_info` | `String` | DISCOVERED | SLAM 状态 |
+| `/slam_info` `/slam_key_info` | `String` | **CONFIRMED** | 约 5 Hz。`ctrl_info.info="not init"`，`currentPose` 全 0，`stateMachine.ctrName="not init"`。厂商 SLAM 控制模块**未初始化** |
+| `/robot_data`（`/slam_info` 内） | | **CONFIRMED** | `errorCode=0`，29 电机正常，`batteryPower=64.0`，`sportMode=-1`，`gaitType=-1` |
 
-**选型结论**：`/dog_odom`（1000 Hz，`odom`→`robot_center`）为当前最可靠的局部里程计。SLAM 两路 odom 有 publisher 但数据未确认，`high_rate_odometry` 无 publisher 不可用。
+**选型结论**：`/dog_odom`（1000 Hz，`odom`→`robot_center`）为当前最可靠的局部里程计。SLAM 两路 odom 有 publisher 但数据未确认，`high_rate_odometry` 无 publisher 不可用。厂商 SLAM 处于 `not init` 状态，无公开 SDK/文档说明初始化流程，**不建议未经授权调用 `/api/slam_operate/request`**。
 
 ### 3.2.1 TF 状态（BLOCKED → 方案确定）
 
@@ -180,17 +205,44 @@ backend: mock
 - 6 个导航可执行节点已注册。
 - 部署路径：`/home/unitree/gdps-2026-embodied-ai`
 
-### 下一步验证项（UNVERIFIED）
+### Level 2：纯感知 LaserScan 转换（CONFIRMED ✅）
 
-1. MID-360 点云 frame_id、有效点数、高度分布（确认转换参数）。
-2. `/dog_odom` 时间戳连续性、位姿漂移评估。
-3. `/global_map` 实际地图内容（frame、分辨率、有效栅格）。
-4. 厂商 SLAM 服务是否激活，能否复用全局定位。
-5. `odom_tf` 节点派生 `odom`→`robot_center` TF 验证。
-6. `/scan` 真实输出与障碍物检测 Dry-run。
-7. `/api/sport/request` 的 API ID、权限、FSM 兼容（live 前）。
+- 启动 `pointcloud_to_laserscan` 节点（仅订阅点云，不发运动）。
+- `/scan` 持续发布，360 角度桶，有效桶 ~310。
+- 前方 +X ±30° 最近距离 ~0.91m，数据真实随环境变化。
+- 转换性能：纯 Python 实现 10→5.7Hz（瓶颈确认），已提交 numpy 向量化快路径，待现场复测频率。
+- 时间戳：已改用原始点云 `header.stamp`，不再用节点本地时钟。
+- 脚本：`bash scripts/g1/perception_dryrun.sh` + `ros2 run gdps_g1_navigation perception_probe.py`（Foxy 兼容，rclpy 订阅）。
 
-执行脚本：`bash scripts/g1/sensor_diag.sh`（机载只读，不发运动）。
+### Level 3：STOP/CLEAR 决策 Dry-run（PARTIAL — 待现场复测）
+
+- `ObstacleMonitor` 已新增盲区（blind_zone_m=0.40）与最小有效点数（min_forward_points=3）保护，<0.40m 返回不判定 CLEAR。
+- 自遮挡过滤：`robot_radius` 上调至 0.35m，边界点用 `<=` 排除。
+- 单元测试 29 项全通过。
+- **待现场复测**：用固定挡板做四方向 A/B 测试，验证 STOP/CLEAR 实时切换。
+
+### 已确认的成功命令
+
+```bash
+# 点云 → LaserScan 转换（不发运动）
+cd /home/unitree/gdps-2026-embodied-ai/shared/navigation/ros2_ws
+source /opt/ros/foxy/setup.bash
+source install/setup.bash
+ros2 run gdps_g1_navigation pointcloud_to_laserscan_node.py
+
+# 纯感知监测（Foxy 兼容 rclpy）
+python3 scripts/g1/perception_probe.py
+```
+
+### 待完成项（明天）
+
+1. 现场复测 numpy 向量化后的 `/scan` 频率是否恢复 ~10Hz。
+2. 确认 `livox_frame` 与 `robot_center` 的真实外参（不能假设雷达 +X = 机器人前方）。
+3. 四方向挡板 A/B 测试，验证 STOP/CLEAR 决策切换。
+4. `odom_tf` 节点派生 `odom`→`robot_center` TF 验证。
+5. `/global_map` 实际地图内容检查。
+6. Foxy 兼容的 slam_toolbox / Nav2 配置准备（仅配置，不启动真实运动）。
+7. `/api/sport/request` 的 API ID、权限、FSM 兼容（live 前，只读审计）。
 
 ---
 
