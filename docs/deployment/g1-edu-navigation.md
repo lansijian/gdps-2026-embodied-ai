@@ -142,23 +142,34 @@ bash scripts/g1/ssh_readonly.sh <authorized-user> <verified-robot-ip>
 
 ---
 
-## 4. 构建与部署（需你打字确认）
+## 4. 构建与部署（需你打字确认；发行版以 Phase 3 为准）
 
-本机当前 **不能** `colcon build`（无 ROS）。在已 source Humble 的 Linux 上：
+本机 Windows **不能** `colcon build`。不要默认 Humble：先 `ls /opt/ros`，再 source 实际目录。
 
 ```bash
+ls /opt/ros
+# source /opt/ros/<实测发行版>/setup.bash
 bash scripts/g1/build.sh
 # 提示后输入 BUILD
 ```
 
-拷到机器人非系统目录：
+拷到机器人非系统目录（默认 **没有** `rsync --delete`）：
 
 ```bash
 bash scripts/g1/deploy.sh <authorized-user> <verified-robot-ip> /home/<user>/gdps-2026-embodied-ai
 # 提示后输入 DEPLOY
 ```
 
-脚本拒绝 `/opt` `/usr` `/etc` `/boot`。不会安装内核模块，不会重启机器人。
+保护：拒绝 `/opt` `/usr` `/etc` `/boot` `/home` 及过浅路径；远端目录名必须是 `gdps-2026-embodied-ai` / `gdps-ws` / `gdps_g1_ws`。`--delete` 仅在远端已有 sentinel `.gdps-g1-deploy-root` 时才允许。不会安装内核模块，不会重启机器人。
+
+---
+
+## 4b. Phase 3 暂停点（当前步骤）
+
+1. 本机只读：`powershell -ExecutionPolicy Bypass -File .\scripts\g1\preflight.ps1`
+2. **接入开发网口后再跑一遍** preflight；不要猜测 IP/用户。
+3. 你确认用户和 IP 之后：`bash scripts/g1/ssh_readonly.sh <authorized-user> <verified-robot-ip>`
+4. 在完成 topic / SDK 记录前，**不要** launch 导航，**不要** live `SetVelocity`。
 
 ---
 

@@ -48,7 +48,10 @@ def main() -> None:
         print("--- powershell net ---")
         print(_run(["powershell", "-NoProfile", "-Command", "Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceAlias,IPAddress | Format-Table -AutoSize | Out-String"]))
         print("--- wsl list ---")
-        print(_run(["wsl", "-l", "-v"]))
+        try:
+            print(_run(["wsl", "-l", "-v"]))
+        except UnicodeEncodeError:
+            print("(wsl list not printable on this console)")
     else:
         print("--- ip ---")
         print(_run(["ip", "-br", "addr"]))

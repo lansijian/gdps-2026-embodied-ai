@@ -232,3 +232,4 @@ log/
 # Site-specific secrets (keep example files)
 configs/g1/navigation/site.yaml
 .env.local
+.gdps-g1-deploy-root
