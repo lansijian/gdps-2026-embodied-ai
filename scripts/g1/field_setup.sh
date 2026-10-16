@@ -102,6 +102,20 @@ ros2 pkg executables gdps_g1_navigation 2>/dev/null || log "警告: 无法列出
 
 log ""
 log "=== 部署+编译完成 ==="
-log "下一步运行传感器诊断:"
-log "  bash $TARGET/scripts/g1/sensor_diag.sh"
-log "日志: $LOG"
+
+# ---------- 6. 传感器只读诊断 ----------
+log ""
+log "--- [6/6] 传感器只读诊断（sensor_diag.sh） ---"
+DIAG_SCRIPT="$TARGET/scripts/g1/sensor_diag.sh"
+if [[ -f "$DIAG_SCRIPT" ]]; then
+  log "运行: bash $DIAG_SCRIPT"
+  log "（只读：订阅/echo/info/hz，不发布、不移动机器人）"
+  bash "$DIAG_SCRIPT" 2>&1 | tee -a "$LOG" || log "sensor_diag.sh 退出码非零，见日志"
+else
+  log "警告: 未找到 $DIAG_SCRIPT"
+fi
+
+log ""
+log "=== 全部完成 ==="
+log "完整日志: $LOG"
+log "请把本脚本的全部输出（或上述日志文件内容）发给开发端分析。"
