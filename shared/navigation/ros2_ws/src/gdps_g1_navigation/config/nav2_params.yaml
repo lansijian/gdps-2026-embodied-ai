@@ -56,7 +56,7 @@ bt_navigator:
   ros__parameters:
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odom
+    odom_topic: /dog_odom   # CANDIDATE on G1 EDU; verify against fusion_odom/high_rate_odometry first
     default_server_timeout: 20
     navigators: ["navigate_to_pose"]
     navigate_to_pose:

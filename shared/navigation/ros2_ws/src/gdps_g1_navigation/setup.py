@@ -26,6 +26,7 @@ setup(
         "console_scripts": [
             "cmdvel_bridge = gdps_g1_navigation.cmdvel_bridge_node:main",
             "scan_restamper = gdps_g1_navigation.scan_restamper_node:main",
+            "pointcloud_to_laserscan = gdps_g1_navigation.pointcloud_to_laserscan_node:main",
             "odom_tf = gdps_g1_navigation.odom_tf_node:main",
             "local_navigator = gdps_g1_navigation.local_navigator_node:main",
             "heartbeat = gdps_g1_navigation.heartbeat_node:main",

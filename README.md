@@ -40,6 +40,14 @@ gdps-2026-embodied-ai/
 
 > 目录是约定结构，可以逐步创建。空文件夹不会被 Git 保存；需要提前保留目录时可添加 `.gitkeep`。
 
+### 真机现场基线
+
+G1 EDU 真机已确认的系统、网络、ROS 2 Topic 等现场基线信息见：
+
+- [`docs/deployment/g1-edu-field-baseline.md`](docs/deployment/g1-edu-field-baseline.md) — 2026-10-16 现场 SSH 实测（Ubuntu 20.04 + ROS 2 Foxy + Livox MID-360）。
+
+涉及 G1 导航、运动控制、传感器接入的开发，必须先读该基线文档，不得沿用未经验证的历史假设（如 Humble、`/scan` 等）。
+
 ### 公共代码如何处理
 
 - **示例：导航功能**。地图定位、路径规划、移动指令封装等通用代码放在 `shared/navigation/`。三个赛道只实现自己的目标点、路线策略及任务调用逻辑。

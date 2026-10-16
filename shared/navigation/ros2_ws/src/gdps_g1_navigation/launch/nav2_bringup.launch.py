@@ -1,6 +1,7 @@
-"""Optional Nav2 bringup. Requires Humble + maps + verified frames.
+"""Optional Nav2 bringup. Requires Foxy + maps + verified frames.
 
 This launch does not enable live motion. Pair with cmdvel_bridge in dry-run.
+G1 EDU on-site baseline (2026-10-16): ROS 2 Foxy, Livox MID-360 PointCloud2.
 """
 
 import os
@@ -36,9 +37,14 @@ def generate_launch_description() -> LaunchDescription:
             ),
             Node(
                 package="gdps_g1_navigation",
-                executable="scan_restamper",
-                name="gdps_scan_restamper",
+                executable="pointcloud_to_laserscan",
+                name="gdps_pointcloud_to_laserscan",
                 output="screen",
+                parameters=[
+                    {"input_topic": "/utlidar/cloud_livox_mid360"},
+                    {"output_topic": "/scan"},
+                ],
             ),
         ]
     )
+

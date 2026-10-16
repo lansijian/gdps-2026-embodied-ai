@@ -1,13 +1,15 @@
-# Names below are defaults / candidates, not site-verified facts.
+# Names below reflect the 2026-10-16 on-site G1 EDU baseline unless marked UNVERIFIED.
+# Real robot publishes PointCloud2, not LaserScan; /scan is produced by our converter node.
 cmd_vel: /cmd_vel
 local_cmd_vel: /gdps/cmd_vel_local
 filtered_cmd_vel: /gdps/cmd_vel_filtered
-scan_raw: /scan_raw
-scan: /scan
-odom: UNVERIFIED
+pointcloud: /utlidar/cloud_livox_mid360   # Livox MID-360 PointCloud2 (CONFIRMED)
+scan: /scan                                # produced by gdps_pointcloud_to_laserscan
+odom: UNVERIFIED   # compare /dog_odom, /state_estimator/fusion_odom, /unitree_slam/high_rate_odometry
 tf: /tf
-sport_request: /api/sport/request
+sport_request: /api/sport/request   # CONFIRMED present; do NOT publish until authorized
 nav_status: /gdps/nav_status
 enable_live: /gdps/enable_live   # must stay unused until Phase 5 authorization
 heartbeat: /gdps/host_heartbeat
 manual_stop: /gdps/manual_stop
+

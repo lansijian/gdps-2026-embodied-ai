@@ -1,20 +1,28 @@
 # Copy to site.yaml (gitignored) after you verify values on the robot.
 # Do not commit passwords, keys, or unverified IPs as facts.
+# Values below are CONFIRMED from 2026-10-16 on-site SSH unless marked UNVERIFIED.
 
 robot_model: Unitree G1 EDU
 firmware: UNVERIFIED
-ssh_user: UNVERIFIED
-robot_ip: UNVERIFIED
-# Candidate only — Unitree docs often show 192.168.123.164. Confirm with ip addr.
-candidate_robot_ip: 192.168.123.164
-developer_ethernet_port: UNVERIFIED
-network_interface_on_robot: UNVERIFIED
-network_interface_on_devpc: UNVERIFIED
-lidar: UNVERIFIED   # expected candidate: Livox MID-360 if physically installed
-odom_topic: UNVERIFIED   # slam-nav used /dog_odom — treat as untrusted until ros2 topic list
-base_frame: UNVERIFIED   # slam-nav used robot_center — confirm TF tree
-livox_frame: UNVERIFIED
+ssh_user: unitree
+robot_ip: 192.168.123.164
+developer_ethernet_port: 以太网   # Windows dev PC Realtek PCIe GbE
+network_interface_on_robot: eth0
+network_interface_on_devpc: 以太网
+developer_ip: 192.168.123.99
+os: Ubuntu 20.04.6 LTS
+ros_distro: foxy
+python: 3.8.10
+rmw_implementation: rmw_cyclonedds_cpp
+
+lidar: Livox MID-360   # CONFIRMED topic /utlidar/cloud_livox_mid360 (PointCloud2)
+pointcloud_topic: /utlidar/cloud_livox_mid360
+# No native LaserScan on the robot; /scan is produced by our pointcloud_to_laserscan node.
 scan_topic: /scan
+odom_topic: UNVERIFIED   # candidates: /dog_odom, /state_estimator/fusion_odom, /unitree_slam/high_rate_odometry
+base_frame: UNVERIFIED   # confirm from odom child_frame_id
+livox_frame: UNVERIFIED  # confirm from point cloud header.frame_id
 cmd_vel_topic: /cmd_vel
-sport_request_topic: /api/sport/request
-workspace_on_robot: /home/UNVERIFIED/gdps-2026-embodied-ai
+sport_request_topic: /api/sport/request   # CONFIRMED present; API ID/permission UNVERIFIED
+workspace_on_robot: /home/unitree/gdps-2026-embodied-ai
+
