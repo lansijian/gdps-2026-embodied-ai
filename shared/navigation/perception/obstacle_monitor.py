@@ -34,6 +34,8 @@ class ObstacleMonitor:
     stop_distance_m: float = 0.60
     slow_distance_m: float = 1.20
     forward_half_angle_rad: float = 0.60
+    blind_zone_m: float = 0.40  # returns closer than this are uncertain (self/near-blind)
+    min_forward_points: int = 3  # need at least this many front returns to decide
     invalid_range: float = 0.0
     last_scan: ScanFrame | None = None
     last_min_forward: float | None = None
@@ -63,18 +65,26 @@ class ObstacleMonitor:
             "n_left": float(len(left)),
             "n_right": float(len(right)),
         }
-        if not valid:
+        # Too few front returns -> uncertain, NOT clear.
+        if len(valid) < self.min_forward_points:
             self.last_min_forward = None
             self.last_decision = AvoidDecision.NO_SENSOR
             return self.last_decision
-        min_fwd = min(valid)
+        # Exclude blind-zone returns from the decision (self-occlusion / near-blind).
+        reliable = [r for r in valid if r >= self.blind_zone_m]
+        if not reliable:
+            # All front returns are in the blind zone -> uncertain, NOT clear.
+            self.last_min_forward = min(valid)
+            self.last_decision = AvoidDecision.NO_SENSOR
+            return self.last_decision
+        min_fwd = min(reliable)
         self.last_min_forward = min_fwd
         if min_fwd <= self.stop_distance_m:
             self.last_decision = AvoidDecision.STOP
             return self.last_decision
         if min_fwd <= self.slow_distance_m:
-            left_min = min(left) if left else scan.range_max
-            right_min = min(right) if right else scan.range_max
+            left_min = min((r for r in left if r >= self.blind_zone_m), default=scan.range_max)
+            right_min = min((r for r in right if r >= self.blind_zone_m), default=scan.range_max)
             if left_min > right_min + 0.15:
                 self.last_decision = AvoidDecision.DETOUR_LEFT
             elif right_min > left_min + 0.15:

@@ -39,7 +39,8 @@ def _scan(forward_range: float, n: int = 21) -> ScanFrame:
 class ObstacleTests(unittest.TestCase):
     def test_stop_when_close(self) -> None:
         mon = ObstacleMonitor(stop_distance_m=0.6, slow_distance_m=1.2)
-        self.assertEqual(mon.update(_scan(0.3)), AvoidDecision.STOP)
+        # 0.5 m is above the 0.40 m blind zone but within stop distance.
+        self.assertEqual(mon.update(_scan(0.5)), AvoidDecision.STOP)
 
     def test_clear_when_far(self) -> None:
         mon = ObstacleMonitor()
@@ -182,7 +183,7 @@ class NavigatorTests(unittest.TestCase):
 
     def test_obstacle_stop_zero_cmd(self) -> None:
         self.nav.start()
-        self.nav.on_scan(_scan(0.2))
+        self.nav.on_scan(_scan(0.5))
         cmd = self.nav.step()
         self.assertTrue(cmd.is_zero())
         self.assertEqual(cmd.source, "obstacle_stop")

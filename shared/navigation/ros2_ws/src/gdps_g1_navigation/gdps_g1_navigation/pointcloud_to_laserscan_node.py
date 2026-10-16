@@ -23,7 +23,7 @@ def main() -> None:
 
     from shared.navigation.perception.pointcloud_to_laserscan import (
         PCLScanParams,
-        convert_points,
+        convert_points_raw,
     )
 
     sensor_qos = QoSProfile(
@@ -44,7 +44,7 @@ def main() -> None:
             self.declare_parameter("range_max", 10.0)
             self.declare_parameter("min_height", 0.05)
             self.declare_parameter("max_height", 1.00)
-            self.declare_parameter("robot_radius", 0.30)
+            self.declare_parameter("robot_radius", 0.35)
 
             in_topic = str(self.get_parameter("input_topic").value)
             out_topic = str(self.get_parameter("output_topic").value)
@@ -67,52 +67,28 @@ def main() -> None:
             )
 
         def _cb(self, msg: PointCloud2) -> None:
-            points = _iter_points(msg)
-            result = convert_points(points, self.params)
+            n_points = msg.height * msg.width
+            result = convert_points_raw(
+                bytes(msg.data),
+                msg.point_step,
+                n_points,
+                self.params,
+            )
             scan = LaserScan()
-            scan.header.stamp = self.get_clock().now().to_msg()
+            # Use the original point cloud timestamp, not node clock.
+            scan.header.stamp = msg.header.stamp
             scan.header.frame_id = msg.header.frame_id
             scan.angle_min = result.angle_min
             scan.angle_max = result.angle_max
             scan.angle_increment = result.angle_increment
+            # MID-360 spins at ~10 Hz; time between scans ~0.1s.
             scan.time_increment = 0.0
-            scan.scan_time = 0.0
+            scan.scan_time = 0.1
             scan.range_min = result.range_min
             scan.range_max = result.range_max
             scan.ranges = result.ranges
             scan.intensities = []
             self.pub.publish(scan)
-
-    def _iter_points(msg: PointCloud2):
-        """Yield (x, y, z) tuples from a PointCloud2 message.
-
-        Prefers sensor_msgs_py.point_cloud2.read_points; falls back to manual
-        struct unpacking if the package or expected fields are unavailable.
-        """
-        try:
-            from sensor_msgs_py import point_cloud2
-
-            for p in point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True):
-                yield (float(p[0]), float(p[1]), float(p[2]))
-            return
-        except Exception:
-            pass
-        # Fallback: manual decode assuming x,y,z are the first three float32 fields.
-        fmt = "<fff"
-        import struct
-
-        point_step = msg.point_step
-        data = msg.data
-        for i in range(msg.height):
-            row_offset = i * msg.row_step
-            for j in range(msg.width):
-                offset = row_offset + j * point_step
-                if offset + 12 > len(data):
-                    continue
-                x, y, z = struct.unpack_from(fmt, data, offset)
-                if math.isnan(x) or math.isnan(y) or math.isnan(z):
-                    continue
-                yield (x, y, z)
 
     rclpy.init()
     node = PointCloudToLaserScan()
