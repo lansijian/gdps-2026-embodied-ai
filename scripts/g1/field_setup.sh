@@ -25,13 +25,17 @@ log "target : $TARGET"
 log "log    : $LOG"
 
 # ---------- 1. 目标目录安全检查 ----------
-log "--- [1/5] 目标目录检查 ---"
+log "--- [1/6] 目标目录检查 ---"
 if [[ -d "$TARGET" ]]; then
-  log "目标目录已存在，内容如下（不会自动删除）："
+  log "目标目录已存在，内容如下（不会自动删除任何文件）："
   ls -la "$TARGET" 2>/dev/null | tee -a "$LOG" || true
-  # 检查是否已有厂商程序或他人数据
-  if compgen -G "$TARGET/*" > /dev/null 2>&1; then
-    log "警告: 目标目录非空，将在其下解压（不删除已有文件）。"
+  if [[ -f "$TARGET/README.md" ]]; then
+    log "检测到我方 README.md，判定为我方历史部署，允许覆盖同名文件。"
+  else
+    log "警告: 目标目录无我方 README.md，可能含他人数据。"
+    log "  tar 仅覆盖同名文件、不删除其他文件，但若有同名关键文件将被覆盖。"
+    log "  如不确定，请 Ctrl+C 中止并人工检查。"
+    sleep 3
   fi
 else
   log "目标目录不存在，创建: $TARGET"
@@ -45,7 +49,7 @@ case "$TARGET" in
 esac
 
 # ---------- 2. 解压 ----------
-log "--- [2/5] 解压 $ARCHIVE 到 $TARGET ---"
+log "--- [2/6] 解压 $ARCHIVE 到 $TARGET ---"
 # 解压前先清理我方 build/install/log（不删除用户其他文件）
 rm -rf "$TARGET/shared/navigation/ros2_ws/build" \
        "$TARGET/shared/navigation/ros2_ws/install" \
@@ -54,7 +58,7 @@ tar -xzf "$ARCHIVE" -C "$TARGET"
 log "解压完成。"
 
 # ---------- 3. ROS 2 Foxy 环境 ----------
-log "--- [3/5] ROS 2 环境 ---"
+log "--- [3/6] ROS 2 环境 ---"
 if [[ -f /opt/ros/foxy/setup.bash ]]; then
   source /opt/ros/foxy/setup.bash
   log "已 source /opt/ros/foxy/setup.bash"
@@ -64,7 +68,7 @@ fi
 log "ROS_DISTRO=$ROS_DISTRO  RMW=$RMW_IMPLEMENTATION  PYTHON=$(python3 --version 2>&1)"
 
 # ---------- 4. 依赖检查 ----------
-log "--- [4/5] 构建依赖检查 ---"
+log "--- [4/6] 构建依赖检查 ---"
 MISSING=()
 for pkg in sensor_msgs nav_msgs geometry_msgs std_msgs sensor_msgs_py tf2_ros; do
   if ! ros2 pkg list 2>/dev/null | grep -qx "$pkg"; then
@@ -79,7 +83,7 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
 fi
 
 # ---------- 5. colcon build ----------
-log "--- [5/5] colcon build ---"
+log "--- [5/6] colcon build ---"
 cd "$TARGET/shared/navigation/ros2_ws"
 log "工作目录: $(pwd)"
 if command -v colcon >/dev/null 2>&1; then
