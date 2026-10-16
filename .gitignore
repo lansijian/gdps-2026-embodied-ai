@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local research clones (do not commit third-party trees)
+.research/
+
+# Runtime logs and colcon artifacts
+logs/
+*.log
+build/
+install/
+log/
+
+# Site-specific secrets (keep example files)
+configs/g1/navigation/site.yaml
+.env.local

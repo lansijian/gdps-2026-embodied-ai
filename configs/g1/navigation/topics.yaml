@@ -1,0 +1,13 @@
+# Names below are defaults / candidates, not site-verified facts.
+cmd_vel: /cmd_vel
+local_cmd_vel: /gdps/cmd_vel_local
+filtered_cmd_vel: /gdps/cmd_vel_filtered
+scan_raw: /scan_raw
+scan: /scan
+odom: UNVERIFIED
+tf: /tf
+sport_request: /api/sport/request
+nav_status: /gdps/nav_status
+enable_live: /gdps/enable_live   # must stay unused until Phase 5 authorization
+heartbeat: /gdps/host_heartbeat
+manual_stop: /gdps/manual_stop
