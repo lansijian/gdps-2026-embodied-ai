@@ -1,0 +1,20 @@
+# Copy to site.yaml (gitignored) after you verify values on the robot.
+# Do not commit passwords, keys, or unverified IPs as facts.
+
+robot_model: Unitree G1 EDU
+firmware: UNVERIFIED
+ssh_user: UNVERIFIED
+robot_ip: UNVERIFIED
+# Candidate only — Unitree docs often show 192.168.123.164. Confirm with ip addr.
+candidate_robot_ip: 192.168.123.164
+developer_ethernet_port: UNVERIFIED
+network_interface_on_robot: UNVERIFIED
+network_interface_on_devpc: UNVERIFIED
+lidar: UNVERIFIED   # expected candidate: Livox MID-360 if physically installed
+odom_topic: UNVERIFIED   # slam-nav used /dog_odom — treat as untrusted until ros2 topic list
+base_frame: UNVERIFIED   # slam-nav used robot_center — confirm TF tree
+livox_frame: UNVERIFIED
+scan_topic: /scan
+cmd_vel_topic: /cmd_vel
+sport_request_topic: /api/sport/request
+workspace_on_robot: /home/UNVERIFIED/gdps-2026-embodied-ai

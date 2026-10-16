@@ -1,0 +1,29 @@
+# Conservative first-run limits. Tighten further after site survey.
+mode: dry-run
+live_token: CHANGE_ME_ON_SITE
+max_vx: 0.10
+max_vy: 0.00
+max_wz: 0.15
+command_timeout_s: 0.25
+command_duration_s: 1.0
+sensor_timeout_s: 0.50
+odom_timeout_s: 0.50
+tf_timeout_s: 0.50
+heartbeat_timeout_s: 1.0
+require_sensor: true
+require_odom: false
+require_tf: false
+# Set true on the robot in Phase 5 together with the host heartbeat node.
+require_heartbeat: false
+stop_distance_m: 0.60
+slow_distance_m: 1.20
+forward_half_angle_rad: 0.60
+cruise_vx: 0.08
+detour_wz: 0.12
+backend: mock
+# backend options after site verification:
+#   mock          - offline / dry-run (default)
+#   unitree_loco  - official G1 LocoClient SetVelocity (path B)
+#   ros_sport     - ROS unitree_api Request api_id 7105 (path A, unverified topic)
+network_interface: ""   # e.g. eth0 — fill after `ip -br addr` on the robot
+lock_owner: gdps_g1_navigation
