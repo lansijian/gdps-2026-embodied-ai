@@ -10,6 +10,14 @@ class FlowNode(str, enum.Enum):
     STABILIZE_BODY = "STABILIZE_BODY"
     REGISTER_WORKSTATION = "REGISTER_WORKSTATION"
     VERIFY_CAMERA_AND_TF = "VERIFY_CAMERA_AND_TF"
+    OBSERVE_TARGET = "OBSERVE_TARGET"
+    ESTIMATE_3D_POSE = "ESTIMATE_3D_POSE"
+    VALIDATE_SENSOR_AND_TF = "VALIDATE_SENSOR_AND_TF"
+    CENTER_TARGET = "CENTER_TARGET"
+    ADJUST_BODY_OR_WAIST = "ADJUST_BODY_OR_WAIST"
+    REOBSERVE = "REOBSERVE"
+    CHECK_REACHABLE_WORKSPACE = "CHECK_REACHABLE_WORKSPACE"
+    MANIPULATION_READY = "MANIPULATION_READY"
     P1_PICK_AND_WEIGH = "P1_PICK_AND_WEIGH"
     P2_PREPARE_TUBE = "P2_PREPARE_TUBE"
     REPEAT_6 = "REPEAT_6"
@@ -56,6 +64,15 @@ MISSION_FLOW_ORDER: Tuple[FlowNode, ...] = (
     FlowNode.STABILIZE_BODY,
     FlowNode.REGISTER_WORKSTATION,
     FlowNode.VERIFY_CAMERA_AND_TF,
+    FlowNode.OBSERVE_TARGET,
+    FlowNode.ESTIMATE_3D_POSE,
+    FlowNode.VALIDATE_SENSOR_AND_TF,
+    FlowNode.CENTER_TARGET,
+    FlowNode.ADJUST_BODY_OR_WAIST,
+    FlowNode.REOBSERVE,
+    FlowNode.CHECK_REACHABLE_WORKSPACE,
+    FlowNode.STABILIZE_BODY,
+    FlowNode.MANIPULATION_READY,
     FlowNode.P1_PICK_AND_WEIGH,
     FlowNode.P2_PREPARE_TUBE,
     FlowNode.REPEAT_6,
@@ -125,6 +142,95 @@ def default_specs() -> Dict[FlowNode, NodeSpec]:
             recover="rgb_only_perception_path",
             safe_hold="P1_blocked",
             evidence=["camera_probe_json", "joint_snapshot"],
+        ),
+        FlowNode.OBSERVE_TARGET: NodeSpec(
+            FlowNode.OBSERVE_TARGET,
+            preconditions=["rgb_frame_ok"],
+            execute="detect/lock target bbox",
+            verify="confidence>=threshold",
+            timeout_s=30.0,
+            max_retries=2,
+            recover="reacquire_target",
+            safe_hold="SAFE_HOLD",
+            evidence=["annotated_rgb"],
+        ),
+        FlowNode.ESTIMATE_3D_POSE: NodeSpec(
+            FlowNode.ESTIMATE_3D_POSE,
+            preconditions=["intrinsics_trusted"],
+            execute="rgbd_target_geometry.estimate_target_range",
+            verify="valid_or_unknown_depth",
+            timeout_s=20.0,
+            max_retries=1,
+            recover="plane_geometry_fallback",
+            safe_hold="no_grasp_pose",
+            evidence=["range_estimate_json"],
+        ),
+        FlowNode.VALIDATE_SENSOR_AND_TF: NodeSpec(
+            FlowNode.VALIDATE_SENSOR_AND_TF,
+            preconditions=["tf_chain_report"],
+            execute="sensor_validation_report + tf_chain_report",
+            verify="no_missing_critical_edge",
+            timeout_s=30.0,
+            max_retries=1,
+            recover="rgb_only_continue",
+            safe_hold="centering_blocked",
+            evidence=["sensor_validation_json"],
+        ),
+        FlowNode.CENTER_TARGET: NodeSpec(
+            FlowNode.CENTER_TARGET,
+            preconditions=["target_centering_controller"],
+            execute="discrete observe-plan-step cycles",
+            verify="pixel_within_deadzone",
+            timeout_s=120.0,
+            max_retries=2,
+            recover="SAFE_HOLD",
+            safe_hold="zero_motion",
+            evidence=["centering_steps_csv"],
+        ),
+        FlowNode.ADJUST_BODY_OR_WAIST: NodeSpec(
+            FlowNode.ADJUST_BODY_OR_WAIST,
+            preconditions=["lidar_allows_lateral", "dry_run_or_live_authorized"],
+            execute="lateral preview or waist_preview (no LowCmd)",
+            verify="odom_delta_matches_intent",
+            timeout_s=60.0,
+            max_retries=2,
+            recover="reverse_last_step",
+            safe_hold="stop_motion",
+            evidence=["dry_run_cmd_log"],
+            motion_handoff="navigation_active",
+        ),
+        FlowNode.REOBSERVE: NodeSpec(
+            FlowNode.REOBSERVE,
+            preconditions=["post_motion_settle"],
+            execute="new rgbd sample",
+            verify="pixel_error_not_worse",
+            timeout_s=30.0,
+            max_retries=2,
+            recover="SAFE_HOLD",
+            safe_hold="freeze",
+            evidence=["before_after_overlay"],
+        ),
+        FlowNode.CHECK_REACHABLE_WORKSPACE: NodeSpec(
+            FlowNode.CHECK_REACHABLE_WORKSPACE,
+            preconditions=["manipulation_workspace_template"],
+            execute="IK readonly feasibility",
+            verify="reachable_readonly",
+            timeout_s=45.0,
+            max_retries=1,
+            recover="adjust_dock_pose",
+            safe_hold="P1_blocked",
+            evidence=["ik_readonly_report"],
+        ),
+        FlowNode.MANIPULATION_READY: NodeSpec(
+            FlowNode.MANIPULATION_READY,
+            preconditions=["centered", "tf_trusted", "body_stable"],
+            execute="ManipulationReadyGate.evaluate",
+            verify="status==MANIPULATION_READY",
+            timeout_s=15.0,
+            max_retries=0,
+            recover="continue_centering",
+            safe_hold="NOT_READY_FOR_GRASP",
+            evidence=["manipulation_ready_json"],
         ),
         FlowNode.P1_PICK_AND_WEIGH: NodeSpec(
             FlowNode.P1_PICK_AND_WEIGH,
