@@ -37,9 +37,9 @@ class GraspPlanner:
     def choose_hand(self, object_position_base: Tuple[float, float, float]) -> HandChoice:
         return "left" if object_position_base[1] >= 0.0 else "right"
 
-    def _ik(self, target_t: np.ndarray, seed: Tuple[float, ...]) -> IkResult:
+    def _ik(self, target_t: np.ndarray, seed: Tuple[float, ...], side: str = "left") -> IkResult:
         if isinstance(self.kinematics, KinematicsBackend):
-            return self.kinematics.ik(target_t, seed)
+            return self.kinematics.ik(target_t, seed, side=side)
         return self.kinematics.ik(target_t, seed)
 
     def _hardware_allowed(self) -> bool:
@@ -94,10 +94,13 @@ class GraspPlanner:
         t_base_wrist_lift = compose_transform(lift, invert_transform(wrist_tcp))
         seed = tuple(0.0 for _ in range(7))
         hw_ok = self._hardware_allowed()
-        ok_pre, ik_pre = self._segment_ok(t_base_wrist_pre, seed, "pregrasp")
-        ok_gr, ik_gr = self._segment_ok(t_base_wrist_grasp, ik_pre.joint_positions if ok_pre else seed, "grasp")
+        side = hand
+        ok_pre, ik_pre = self._segment_ok(t_base_wrist_pre, seed, "pregrasp", side)
+        ok_gr, ik_gr = self._segment_ok(
+            t_base_wrist_grasp, ik_pre.joint_positions if ok_pre else seed, "grasp", side
+        )
         ok_lift, ik_lift = self._segment_ok(
-            t_base_wrist_lift, ik_gr.joint_positions if ok_gr else seed, "lift"
+            t_base_wrist_lift, ik_gr.joint_positions if ok_gr else seed, "lift", side
         )
         reachable = ok_pre and ok_gr and ok_lift
         pre_pose = self._pose_from_transform(tablet_pose_base.frame_id, t_base_wrist_pre, tablet_pose_base)
@@ -118,11 +121,11 @@ class GraspPlanner:
             message=msg,
         )
 
-    def _segment_ok(self, target_t: np.ndarray, seed: Tuple[float, ...], label: str) -> Tuple[bool, IkResult]:
-        if isinstance(self.kinematics, KinematicsBackend) and hasattr(
-            self.kinematics, "check_segment_reachable"
-        ):
-            return self.kinematics.check_segment_reachable(seed, target_t, label)
+    def _segment_ok(
+        self, target_t: np.ndarray, seed: Tuple[float, ...], label: str, side: str
+    ) -> Tuple[bool, IkResult]:
+        if isinstance(self.kinematics, KinematicsBackend):
+            return self.kinematics.check_segment_reachable(seed, target_t, label, side=side)
         ik = self._ik(target_t, seed)
         return ik.success, ik
 

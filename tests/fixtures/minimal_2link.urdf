@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<robot name="minimal_2link">
+  <link name="pelvis"/>
+  <link name="torso_link"/>
+  <link name="left_wrist_yaw_link"/>
+  <joint name="waist_yaw_joint" type="revolute">
+    <parent link="pelvis"/>
+    <child link="torso_link"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1" upper="1" effort="10" velocity="1"/>
+  </joint>
+  <joint name="left_shoulder_pitch_joint" type="revolute">
+    <parent link="torso_link"/>
+    <child link="left_wrist_yaw_link"/>
+    <origin xyz="0.1 0.2 0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1" upper="1" effort="10" velocity="1"/>
+  </joint>
+</robot>

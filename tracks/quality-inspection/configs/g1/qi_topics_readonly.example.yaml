@@ -1,0 +1,22 @@
+# Copy to qi_topics_readonly.yaml on G1 PC2 (gitignored locally if secrets).
+# Topics are DOCUMENTED_UNVERIFIED until field probe confirms them.
+
+robot_variant: G1_29_HAND14
+urdf_env: GDPS_G1_URDF_PATH
+
+ros2:
+  rgb_image: ""          # e.g. /camera/color/image_raw
+  depth_image: ""        # optional
+  camera_info: ""        # sensor_msgs/CameraInfo
+  joint_states: ""       # may be absent on bare DDS setups
+  dog_odom: /dog_odom
+
+unitree_dds:
+  # Cyclone DDS topics from SDK2 / xr_teleoperate (verify on device)
+  lowstate: ""           # rt/lowstate or sport mode state
+  dex3_state_left: rt/lf/dex3/state
+  dex3_state_right: rt/rf/dex3/state
+
+teleimager:
+  enabled: false
+  base_url: ""

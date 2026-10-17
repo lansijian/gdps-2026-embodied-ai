@@ -13,14 +13,19 @@ from gdps_qi.adapters.dex3_hand import Dex3HandAdapter
 from gdps_qi.adapters.robot_hardware import RobotHardwareAdapter
 from gdps_qi.evidence.evidence_recorder import EvidenceRecorder
 from gdps_qi.execution.skill_executor import SkillExecutor
-from gdps_qi.kinematics.kinematics_backend import G1UrdfKinematicsAdapter, SimplifiedTestKinematics
+from gdps_qi.kinematics.kinematics_backend import (
+    G1UrdfKinematicsAdapter,
+    SimplifiedTestKinematics,
+)
 from gdps_qi.mission.deadline_manager import DeadlineManager
 from gdps_qi.perception.pose_estimator import PoseEstimator
 from gdps_qi.planning.grasp_planner import GraspPlanner
 from gdps_qi.planning.motion_safety_gate import MotionSafetyGate, SafetyContext
 from gdps_qi.registry.object_registry import ObjectRegistry
 from gdps_qi.runtime.execution_mode import ExecutionMode, allow_simulation_assets, get_execution_mode
+from gdps_qi.skills.p1_localize import register_p1_localize_skills
 from gdps_qi.skills.p1_tablet import register_p1_skills
+from gdps_qi.transforms.g1_tf_chain import G1TfChain
 from gdps_qi.skills.p2_tube import P2State, register_p2_skills
 from gdps_qi.skills.p3_centrifuge import CentrifugeState, register_p3_skills
 from gdps_qi.skills.p4_p5_p6 import MissionTailState, register_p456_skills
@@ -43,6 +48,7 @@ class MissionController:
     phase: MissionPhase = MissionPhase.P1_TABLET
     _sim_workstation_registered: bool = False
     results: List[SkillResult] = field(default_factory=list)
+    g1_tf: Optional[G1TfChain] = None
 
     @classmethod
     def build(
@@ -86,6 +92,9 @@ class MissionController:
             safety=safety,
             evidence=evidence,
         )
+        g1_tf = None
+        if isinstance(kinematics, G1UrdfKinematicsAdapter) and kinematics._model:
+            g1_tf = G1TfChain(tf=tf, urdf=kinematics._model)
         mc = cls(
             registry=registry,
             tf=tf,
@@ -96,6 +105,7 @@ class MissionController:
             p2_state=P2State(),
             p3_state=CentrifugeState(),
             tail_state=MissionTailState(),
+            g1_tf=g1_tf,
         )
         mc._register_skills()
         return mc
@@ -107,6 +117,7 @@ class MissionController:
 
     def _register_skills(self) -> None:
         register_p1_skills(self.executor)
+        register_p1_localize_skills(self.executor, self.g1_tf)
         register_p2_skills(self.executor, self.p2_state)
         register_p3_skills(self.executor, self.p3_state)
         register_p456_skills(self.executor, self.tail_state)

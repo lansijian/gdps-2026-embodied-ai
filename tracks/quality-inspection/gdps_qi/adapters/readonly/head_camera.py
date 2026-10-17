@@ -2,29 +2,71 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
 from gdps_qi.adapters.camera import CameraFrame, CameraInfo
+from gdps_qi.adapters.readonly.ros2_probe import probe_ros2_topic_once
 from gdps_qi.types import VerificationStatus
 
 
 @dataclass
 class HeadCameraReadOnly:
-    """Read-only head camera probe. ROS/SDK bindings wired on robot after verification."""
-
-    status: VerificationStatus = VerificationStatus.UNKNOWN
     ros_rgb_topic: str = ""
     ros_depth_topic: str = ""
     ros_camera_info_topic: str = ""
+    status: VerificationStatus = VerificationStatus.UNKNOWN
     _last_frame: Optional[CameraFrame] = None
+    _last_probe: Dict[str, object] = field(default_factory=dict)
 
-    def connect(self) -> Tuple[bool, str]:
+    def probe(self, live: bool, timeout_s: float = 3.0) -> Dict[str, object]:
+        report: Dict[str, object] = {
+            "device": "head_camera",
+            "rgb_topic": self.ros_rgb_topic,
+            "depth_topic": self.ros_depth_topic,
+            "camera_info_topic": self.ros_camera_info_topic,
+            "depth_available": False,
+            "missing": [],
+        }
+        if not self.ros_rgb_topic:
+            report["missing"].append("rgb_topic_unconfigured")
+        if not live:
+            report["mode"] = "dry_run_schema"
+            self._last_probe = report
+            return report
+        report["mode"] = "live_readonly"
+        if self.ros_camera_info_topic:
+            try:
+                from sensor_msgs.msg import CameraInfo
+
+                report["camera_info"] = probe_ros2_topic_once(
+                    self.ros_camera_info_topic, CameraInfo, timeout_s
+                )
+            except ImportError:
+                report["camera_info"] = {"ok": False, "error": "sensor_msgs_unavailable"}
         if self.ros_rgb_topic:
+            try:
+                from sensor_msgs.msg import Image
+
+                report["rgb"] = probe_ros2_topic_once(self.ros_rgb_topic, Image, timeout_s)
+            except ImportError:
+                report["rgb"] = {"ok": False, "error": "sensor_msgs_unavailable"}
+        if self.ros_depth_topic:
+            try:
+                from sensor_msgs.msg import Image
+
+                d = probe_ros2_topic_once(self.ros_depth_topic, Image, timeout_s)
+                report["depth"] = d
+                report["depth_available"] = bool(d.get("ok"))
+            except ImportError:
+                report["depth"] = {"ok": False, "error": "sensor_msgs_unavailable"}
+        else:
+            report["missing"].append("depth_topic_unconfigured")
+        self._last_probe = report
+        if report.get("rgb", {}).get("ok"):
             self.status = VerificationStatus.DOCUMENTED_UNVERIFIED
-            return True, "ros_topics_configured_not_subscribed"
-        return False, "no_rgb_topic_configured"
+        return report
 
     def read_file(self, path: str, info: CameraInfo) -> CameraFrame:
         try:
@@ -38,12 +80,3 @@ class HeadCameraReadOnly:
 
     def get_latest(self) -> Optional[CameraFrame]:
         return self._last_frame
-
-    def field_check_steps(self) -> Tuple[str, ...]:
-        return (
-            "ros2 topic list -t | grep -i image",
-            "ros2 topic info <rgb_topic> -v",
-            "ros2 topic echo --once <camera_info_topic>",
-            "If teleimager: confirm ZMQ/HTTP endpoint from Device.md",
-            "Record whether aligned depth exists; do not assume D435i",
-        )
