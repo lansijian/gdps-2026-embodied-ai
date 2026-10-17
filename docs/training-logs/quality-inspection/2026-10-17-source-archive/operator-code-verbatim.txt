@@ -1,0 +1,1586 @@
+以下按“今天实际运行过/保存过”的全部代码归档。每条标注真实状态。未出现过的代码不补写；heredoc 脚本标注“未保存为文件”。
+
+---
+
+# 一、起身脚本
+
+## 1. `g1_stand_from_lie_safe.py` — 已保存，**真机实测通过**
+
+```python
+#!/usr/bin/env python3
+"""
+g1_stand_from_lie_safe.py — 最保守的 SDK 起身尝试。
+仅调用官方 Damp() -> Lie2StandUp()，不发送任何自定义关节指令。
+前提：机器人已上电，周围清空，急停在手。
+"""
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    return ans == "yes"
+
+def main():
+    print("=== 保守起身脚本 ===")
+    print("警告：Lie2StandUp 官方要求机器人面朝上。")
+    print("如果机器人当前面朝下（趴着），请优先尝试手柄 L2+X。")
+    if not confirm("确认要继续用 SDK 尝试吗？"):
+        print("已取消。")
+        return
+
+    ChannelFactoryInitialize(0, "eth0")
+    c = LocoClient()
+    c.SetTimeout(10.0)
+    if hasattr(c, "Init"):
+        c.Init()
+
+    print("发送 Damp() ...")
+    ret_damp = c.Damp()
+    print(f"Damp() 返回: {ret_damp} (0=成功)")
+    time.sleep(1.0)
+
+    if not confirm("Damp 已完成。按 Enter 尝试 Lie2StandUp()，或输入 NO 取消..."):
+        print("已取消起身。")
+        return
+
+    print("发送 Lie2StandUp() ...")
+    if hasattr(c, "Lie2StandUp"):
+        ret = c.Lie2StandUp()
+    else:
+        print("未找到 Lie2StandUp()，尝试 SetFsmId(702) ...")
+        ret = c.SetFsmId(702)
+    print(f"返回: {ret} (0=成功)")
+    print("指令已发出。请密切观察机器人，急停保持在手。")
+    print("如果 5 秒内没有任何起身动作，或动作异常，立即按急停。")
+
+if __name__ == "__main__":
+    main()
+```
+
+实测输出：`Damp() 返回: None`；`Lie2StandUp() 返回: None`；机器人正常起身。
+
+---
+
+# 二、腿部脚本
+
+## 2. `prepare_walk.py` 第一版 — 已保存，**真机报 AttributeError**
+
+```python
+#!/usr/bin/env python3
+"""
+prepare_walk.py — 将 G1 从 FSM 802 安全过渡到 500 (Start) + balance_mode=1。
+不发送任何速度指令。仅做状态过渡与确认。
+用法: python3 prepare_walk.py [--iface eth0]
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0", help="连接机器人的网卡 (默认 eth0)")
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    fsm = client.GetFsmId()
+    print(f"当前 FSM: {fsm}")
+
+    if fsm == 500:
+        print("已在 FSM 500，无需过渡。")
+    else:
+        confirm(
+            f"当前 FSM={fsm}。将尝试 SetFsmId(500) 进入 Start 状态。\n"
+            "请确认：机器人站立稳定、周围清空、急停在手。"
+        )
+        ret = client.SetFsmId(500)
+        print(f"SetFsmId(500) 返回: {ret}  (0 = 成功)")
+        if ret != 0:
+            print(
+                "过渡失败。若曾按过手柄 L2+… 组合，可能进入了 debug 模式，"
+                "请重启机器人后，仅用 L1+A -> L1+UP 进入正常模式再试。"
+            )
+            return
+        time.sleep(1.0)
+
+    try:
+        bm = client.GetBalanceMode()
+        print(f"当前 balance_mode: {bm}")
+    except Exception as e:
+        print(f"GetBalanceMode 异常: {e}")
+
+    ret = client.SetBalanceMode(1)
+    print(f"SetBalanceMode(1) 返回: {ret}  (0 = 成功)")
+    if ret == 0:
+        print("OK: 已进入连续步态 (balance_mode=1)。现在可以运行 move_pulse.py。")
+    else:
+        print("FAIL: 设置步态失败，移动指令可能仍被拒绝。")
+
+if __name__ == "__main__":
+    main()
+```
+
+实测错误：`AttributeError: 'LocoClient' object has no attribute 'GetFsmId'`。
+
+## 3. `prepare_walk.py` 第二版 — 已保存，**实测 SetFsmId(500)=0 / SetBalanceMode(1)=0，无位移**
+
+```python
+#!/usr/bin/env python3
+"""
+prepare_walk.py — 将 G1 从 FSM 802 过渡到 500 (Start) + balance_mode=1。
+不调用 GetFsmId()，直接尝试 SetFsmId(500) 或 Start()。
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0")
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    confirm(
+        "将尝试把机器人从当前状态设置到 FSM 500 (Start)。\n"
+        "请确认：机器人站立稳定、周围清空、急停在手。"
+    )
+
+    if hasattr(client, "SetFsmId"):
+        ret = client.SetFsmId(500)
+        print(f"SetFsmId(500) 返回: {ret}  (0 = 成功)")
+    elif hasattr(client, "Start"):
+        ret = client.Start()
+        print(f"Start() 返回: {ret}  (0 = 成功)")
+    else:
+        print("错误：当前 LocoClient 既没有 SetFsmId 也没有 Start，无法切换 FSM。")
+        print("请检查 unitree_sdk2py 是否安装正确，或升级 SDK。")
+        return
+
+    if ret != 0:
+        print("FSM 切换失败。若曾按过手柄 L2+… 组合，可能进入了 debug 模式。")
+        print("请重启机器人后，仅用 L1+A -> L1+UP 进入正常模式再试。")
+        return
+
+    time.sleep(1.0)
+
+    if hasattr(client, "SetBalanceMode"):
+        ret = client.SetBalanceMode(1)
+        print(f"SetBalanceMode(1) 返回: {ret}  (0 = 成功)")
+        if ret == 0:
+            print("OK: 已设置 balance_mode=1（连续步态）。可以运行 move_pulse.py。")
+        else:
+            print("WARN: 步态设置失败，移动指令可能仍被拒绝。")
+    else:
+        print("WARN: LocoClient 没有 SetBalanceMode 方法，跳过步态设置。")
+        print("直接尝试 move_pulse.py，观察是否产生步态。")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 4. `move_pulse.py` 第一版 — 已保存，**有 `GetFsmId()`，会报 AttributeError**
+
+```python
+#!/usr/bin/env python3
+"""
+move_pulse.py — 在 FSM 500 + balance_mode=1 下发送单次微小速度脉冲。
+默认 vx=0.1 m/s, duration=0.5s。支持 --vx/--vy/--omega/--duration 参数。
+用法: python3 move_pulse.py [--iface eth0] [--vx 0.1] [--duration 0.5]
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0")
+    parser.add_argument("--vx", type=float, default=0.1, help="前进速度 m/s (负值后退)")
+    parser.add_argument("--vy", type=float, default=0.0, help="侧移速度 m/s")
+    parser.add_argument("--omega", type=float, default=0.0, help="偏航角速度 rad/s")
+    parser.add_argument("--duration", type=float, default=0.5, help="速度持续时间 s")
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    fsm = client.GetFsmId()
+    print(f"当前 FSM: {fsm}")
+    if fsm != 500:
+        print("WARN: 当前不是 FSM 500，移动可能失败。建议先运行 prepare_walk.py。")
+        confirm("仍要继续吗？")
+
+    confirm(
+        f"将发送: vx={args.vx}, vy={args.vy}, omega={args.omega}，"
+        f"持续 {args.duration}s。\n"
+        "确认周围清空、急停在手。"
+    )
+
+    print("发送速度...")
+    ret = client.SetVelocity(args.vx, args.vy, args.omega, args.duration)
+    print(f"SetVelocity 返回: {ret}  (0 = 成功)")
+
+    time.sleep(args.duration + 0.1)
+    stop_ret = client.SetVelocity(0.0, 0.0, 0.0, 0.5)
+    print(f"停止指令返回: {stop_ret}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 5. `move_pulse.py` 第二版 — 已保存，**实测 SetVelocity=0 但无位移**
+
+```python
+#!/usr/bin/env python3
+"""
+move_pulse.py — 发送单次微小速度脉冲。
+不依赖 GetFsmId，直接尝试 SetVelocity。
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0")
+    parser.add_argument("--vx", type=float, default=0.1)
+    parser.add_argument("--vy", type=float, default=0.0)
+    parser.add_argument("--omega", type=float, default=0.0)
+    parser.add_argument("--duration", type=float, default=0.5)
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    if not hasattr(client, "SetVelocity"):
+        print("错误：LocoClient 没有 SetVelocity 方法，无法发送速度。")
+        return
+
+    confirm(
+        f"将发送: vx={args.vx}, vy={args.vy}, omega={args.omega}，"
+        f"持续 {args.duration}s。\n"
+        "确认周围清空、急停在手。"
+    )
+
+    print("发送速度...")
+    ret = client.SetVelocity(args.vx, args.vy, args.omega, args.duration)
+    print(f"SetVelocity 返回: {ret}  (0 = 成功)")
+
+    time.sleep(args.duration + 0.1)
+    stop_ret = client.SetVelocity(0.0, 0.0, 0.0, 0.5)
+    print(f"停止指令返回: {stop_ret}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 6. `g1_leg_module.py` — 已保存，**语法 OK；未独立真机复测脉冲**
+
+```python
+#!/usr/bin/env python3
+"""
+g1_leg_module.py — 已验证可用的 G1 腿部运动控制模块。
+用法:
+    from g1_leg_module import G1LegController
+    leg = G1LegController(iface="eth0")
+    leg.pulse(vx=0.15, duration=2.0)
+    leg.pulse(vx=-0.10, duration=2.0)
+    leg.pulse(vy=0.10, duration=2.0)
+    leg.pulse(omega=0.2, duration=2.0)
+"""
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+class G1LegController:
+    def __init__(self, iface="eth0"):
+        ChannelFactoryInitialize(0, iface)
+        self.client = LocoClient()
+        self.client.SetTimeout(10.0)
+        if hasattr(self.client, "Init"):
+            self.client.Init()
+
+    def pulse(self, vx=0.0, vy=0.0, omega=0.0, duration=2.0, pre_stop=0.5):
+        ret = self.client.SetVelocity(vx, vy, omega, duration)
+        if ret != 0:
+            raise RuntimeError(f"SetVelocity 返回非零: {ret}")
+        time.sleep(duration + 0.2)
+        for _ in range(2):
+            self.client.SetVelocity(0.0, 0.0, 0.0, pre_stop)
+            time.sleep(0.15)
+        return ret
+
+    def stop(self):
+        for _ in range(3):
+            self.client.SetVelocity(0.0, 0.0, 0.0, 0.5)
+            time.sleep(0.1)
+
+if __name__ == "__main__":
+    print("g1_leg_module 自检：导入成功。")
+```
+
+## 7. `g1_forward.py` — 仅保存命令，**未确认文件存在，无运行记录**
+
+```python
+#!/usr/bin/env python3
+"""g1_forward.py — 安全向前走一小段距离。默认 vx=0.15 m/s, 2s ≈ 0.3m"""
+import time, argparse
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--vx", type=float, default=0.15, help="前进速度 m/s")
+    p.add_argument("--duration", type=float, default=2.0, help="持续时间 s")
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    c = LocoClient(); c.SetTimeout(10.0)
+    c.Init() if hasattr(c, "Init") else None
+
+    dist = a.vx * a.duration
+    print(f"[FORWARD] vx={a.vx} m/s, {a.duration}s, 预计距离≈{dist:.2f}m")
+    print("3秒后开始，请确认急停在手、周围清空...")
+    for i in (3, 2, 1):
+        print(f"  {i}..."); time.sleep(1)
+
+    ret = c.SetVelocity(a.vx, 0.0, 0.0, a.duration)
+    print(f"SetVelocity 返回: {ret}")
+    time.sleep(a.duration + 0.3)
+    for _ in range(2):
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5); time.sleep(0.3)
+    print("[FORWARD] 完成。")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 8. `g1_backward.py` — 仅保存命令，**未确认文件存在，无运行记录**
+
+```python
+#!/usr/bin/env python3
+"""g1_backward.py — 安全向后走一小段距离。默认 vx=-0.10 m/s, 2s ≈ 0.2m"""
+import time, argparse
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--vx", type=float, default=-0.10, help="后退速度 m/s (负值)")
+    p.add_argument("--duration", type=float, default=2.0)
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    c = LocoClient(); c.SetTimeout(10.0)
+    c.Init() if hasattr(c, "Init") else None
+
+    dist = abs(a.vx) * a.duration
+    print(f"[BACKWARD] vx={a.vx} m/s, {a.duration}s, 预计距离≈{dist:.2f}m")
+    print("3秒后开始，请确认急停在手、身后清空...")
+    for i in (3, 2, 1):
+        print(f"  {i}..."); time.sleep(1)
+
+    ret = c.SetVelocity(a.vx, 0.0, 0.0, a.duration)
+    print(f"SetVelocity 返回: {ret}")
+    time.sleep(a.duration + 0.3)
+    for _ in range(2):
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5); time.sleep(0.3)
+    print("[BACKWARD] 完成。")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 9. `g1_left.py` — 仅保存命令，**未确认文件存在，无运行记录**
+
+```python
+#!/usr/bin/env python3
+"""g1_left.py — 安全向左走一小段距离。默认 vy=0.10 m/s, 2s ≈ 0.2m
+注意: vy 正方向若实际为右, 把默认值改为 -0.10 即可。"""
+import time, argparse
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--vy", type=float, default=0.10, help="侧移速度 m/s")
+    p.add_argument("--duration", type=float, default=2.0)
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    c = LocoClient(); c.SetTimeout(10.0)
+    c.Init() if hasattr(c, "Init") else None
+
+    dist = abs(a.vy) * a.duration
+    print(f"[LEFT] vy={a.vy} m/s, {a.duration}s, 预计距离≈{dist:.2f}m")
+    print("3秒后开始，请确认急停在手、左侧清空...")
+    for i in (3, 2, 1):
+        print(f"  {i}..."); time.sleep(1)
+
+    ret = c.SetVelocity(0.0, a.vy, 0.0, a.duration)
+    print(f"SetVelocity 返回: {ret}")
+    time.sleep(a.duration + 0.3)
+    for _ in range(2):
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5); time.sleep(0.3)
+    print("[LEFT] 完成。")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 10. `g1_right.py` — 仅保存命令，**未确认文件存在，无运行记录**
+
+```python
+#!/usr/bin/env python3
+"""g1_right.py — 安全向右走一小段距离。默认 vy=-0.10 m/s, 2s ≈ 0.2m
+注意: vy 负方向若实际为左, 把默认值改为 +0.10 即可。"""
+import time, argparse
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--vy", type=float, default=-0.10, help="侧移速度 m/s")
+    p.add_argument("--duration", type=float, default=2.0)
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    c = LocoClient(); c.SetTimeout(10.0)
+    c.Init() if hasattr(c, "Init") else None
+
+    dist = abs(a.vy) * a.duration
+    print(f"[RIGHT] vy={a.vy} m/s, {a.duration}s, 预计距离≈{dist:.2f}m")
+    print("3秒后开始，请确认急停在手、右侧清空...")
+    for i in (3, 2, 1):
+        print(f"  {i}..."); time.sleep(1)
+
+    ret = c.SetVelocity(0.0, a.vy, 0.0, a.duration)
+    print(f"SetVelocity 返回: {ret}")
+    time.sleep(a.duration + 0.3)
+    for _ in range(2):
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5); time.sleep(0.3)
+    print("[RIGHT] 完成。")
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+# 三、手臂脚本（事故批，已废弃）
+
+## 11. `g1_arm_base.py` — 已保存，**事故相关，已废弃**。权重硬切 1.0，无渐变/监控。
+
+```python
+#!/usr/bin/env python3
+"""g1_arm_base.py — G1 手臂控制的共享基类，封装 rt/arm_sdk 发布与平滑插值。"""
+import time
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_ARM = [15, 16, 17, 18, 19, 20, 21]
+RIGHT_ARM = [22, 23, 24, 25, 26, 27, 28]
+ARM_ALL = LEFT_ARM + RIGHT_ARM
+K_NOT_USED = 29
+
+KP_ARM = 40.0
+KD_ARM = 1.0
+
+class G1ArmController:
+    def __init__(self, iface="eth0"):
+        ChannelFactoryInitialize(0, iface)
+        self.low_cmd = unitree_hg_msg_dds__LowCmd_()
+        self.low_state = None
+        self.first_state = False
+        self.crc = CRC()
+
+        self.pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+        self.pub.Init()
+        self.sub = ChannelSubscriber("rt/lowstate", LowState_)
+        self.sub.Init(self._lowstate_handler, 10)
+
+        t0 = time.time()
+        while not self.first_state and time.time() - t0 < 5.0:
+            time.sleep(0.1)
+        if not self.first_state:
+            raise RuntimeError("未收到 rt/lowstate，检查网卡和 DDS。")
+
+    def _lowstate_handler(self, msg):
+        self.low_state = msg
+        self.first_state = True
+
+    def _write_once(self, q_target_full):
+        cmd = self.low_cmd
+        cmd.motor_cmd[K_NOT_USED].q = 1.0  # 使能 arm_sdk（硬切）
+        cmd.motor_cmd[K_NOT_USED].kp = 0.0
+        cmd.motor_cmd[K_NOT_USED].kd = 0.0
+        cmd.motor_cmd[K_NOT_USED].tau = 0.0
+
+        for j in ARM_ALL:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = float(q_target_full[j])
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = KP_ARM
+            cmd.motor_cmd[j].kd = KD_ARM
+
+        cmd.crc = self.crc.Crc(cmd)
+        self.pub.Write(cmd)
+
+    def move_to(self, target_deg: dict, duration=2.0, fps=50):
+        q_start = np.zeros(35)
+        for j in ARM_ALL:
+            q_start[j] = self.low_state.motor_state[j].q
+
+        q_target = q_start.copy()
+        for j, deg in target_deg.items():
+            q_target[j] = np.deg2rad(deg)
+
+        steps = max(1, int(duration * fps))
+        dt = 1.0 / fps
+        for i in range(steps + 1):
+            ratio = i / steps
+            q_now = q_start * (1 - ratio) + q_target * ratio
+            self._write_once(q_now)
+            time.sleep(dt)
+
+    def release(self):
+        q_now = np.zeros(35)
+        for j in ARM_ALL:
+            q_now[j] = self.low_state.motor_state[j].q
+        for _ in range(20):
+            self._write_once(q_now)
+            time.sleep(0.02)
+        cmd = self.low_cmd
+        cmd.motor_cmd[K_NOT_USED].q = 0.0
+        cmd.crc = self.crc.Crc(cmd)
+        for _ in range(10):
+            self.pub.Write(cmd)
+            time.sleep(0.02)
+
+def run_arm_action(target_deg, duration=2.0, hold=1.0, iface="eth0"):
+    ctrl = G1ArmController(iface)
+    print(f"目标: {target_deg}")
+    print(f"移动 {duration}s ...")
+    ctrl.move_to(target_deg, duration=duration)
+    print(f"保持 {hold}s ...")
+    time.sleep(hold)
+    print("释放 arm_sdk ...")
+    ctrl.release()
+    print("完成。")
+```
+
+## 12. `g1_arm_lift_left.py` — 已保存，**与事故同批，已废弃**
+
+```python
+#!/usr/bin/env python3
+"""抬左臂: 左肩 Pitch 45°, Roll 20°, Elbow 30°。"""
+from g1_arm_base import run_arm_action, LEFT_ARM
+
+target = {LEFT_ARM[0]: 45, LEFT_ARM[1]: 20, LEFT_ARM[3]: 30}
+run_arm_action(target, duration=2.5, hold=1.0)
+```
+
+## 13. `g1_arm_lift_right.py` — 已保存，**已废弃**
+
+```python
+#!/usr/bin/env python3
+"""抬右臂: 右肩 Pitch 45°, Roll -20°, Elbow 30°。"""
+from g1_arm_base import run_arm_action, RIGHT_ARM
+
+target = {RIGHT_ARM[0]: 45, RIGHT_ARM[1]: -20, RIGHT_ARM[3]: 30}
+run_arm_action(target, duration=2.5, hold=1.0)
+```
+
+## 14. `g1_arm_lift_both.py` — 已保存，**已废弃**
+
+```python
+#!/usr/bin/env python3
+"""抬双臂: 双肩 Pitch 40°, Roll ±15°, Elbow 25°。"""
+from g1_arm_base import run_arm_action, LEFT_ARM, RIGHT_ARM
+
+target = {
+    LEFT_ARM[0]: 40,  LEFT_ARM[1]: 15,  LEFT_ARM[3]: 25,
+    RIGHT_ARM[0]: 40, RIGHT_ARM[1]: -15, RIGHT_ARM[3]: 25,
+}
+run_arm_action(target, duration=3.0, hold=1.0)
+```
+
+## 15. `g1_arm_left_forward.py` — 已保存，**已废弃**
+
+```python
+#!/usr/bin/env python3
+"""左臂向前: 左肩 Yaw 40°, Pitch 20°。"""
+from g1_arm_base import run_arm_action, LEFT_ARM
+
+target = {LEFT_ARM[0]: 20, LEFT_ARM[2]: 40}
+run_arm_action(target, duration=2.0, hold=1.0)
+```
+
+## 16. `g1_arm_left_toward_right.py` — 已保存，**已废弃**
+
+```python
+#!/usr/bin/env python3
+"""左臂向右(横跨): 左肩 Roll -20°, Elbow 40°。首次测试速度放慢。"""
+from g1_arm_base import run_arm_action, LEFT_ARM
+
+target = {LEFT_ARM[1]: -20, LEFT_ARM[3]: 40}
+run_arm_action(target, duration=3.0, hold=1.0)
+```
+
+---
+
+# 四、安全版手臂脚本
+
+## 17. `g1_arm_safe.py` — 已保存，**语法 OK；未记录真机运行**
+
+```python
+#!/usr/bin/env python3
+"""
+g1_arm_safe.py — 安全的 arm_sdk 手臂控制框架（仅用于微小测试）。
+核心安全机制：权重从 0 渐变到目标值，执行后渐变回 0，全程检查姿态。
+"""
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_ARM = [15,16,17,18,19,20,21]
+RIGHT_ARM = [22,23,24,25,26,27,28]
+K_NOT_USED = 29
+KP_SAFE = 25.0
+KD_SAFE = 1.5
+
+class SafeArmController:
+    def __init__(self, iface="eth0"):
+        ChannelFactoryInitialize(0, iface)
+        self.cmd = unitree_hg_msg_dds__LowCmd_()
+        self.state = None
+        self.crc = CRC()
+        self.pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+        self.pub.Init()
+        self.sub = ChannelSubscriber("rt/lowstate", LowState_)
+        self.sub.Init(self._handler, 10)
+        t0 = time.time()
+        while self.state is None and time.time() - t0 < 5.0:
+            time.sleep(0.1)
+        if self.state is None:
+            raise RuntimeError("未收到 lowstate")
+
+    def _handler(self, msg):
+        self.state = msg
+
+    def _write(self, q_target, weight):
+        cmd = self.cmd
+        cmd.motor_cmd[K_NOT_USED].q = float(np.clip(weight, 0.0, 1.0))
+        cmd.motor_cmd[K_NOT_USED].kp = 0.0
+        cmd.motor_cmd[K_NOT_USED].kd = 0.0
+        cmd.motor_cmd[K_NOT_USED].tau = 0.0
+        for j in LEFT_ARM + RIGHT_ARM:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = float(q_target[j])
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = KP_SAFE
+            cmd.motor_cmd[j].kd = KD_SAFE
+        cmd.crc = self.crc.Crc(cmd)
+        self.pub.Write(cmd)
+
+    def move_safe(self, target_deg, duration=3.0, ramp_time=1.0, fps=50):
+        q_start = np.zeros(35)
+        for j in LEFT_ARM + RIGHT_ARM:
+            q_start[j] = self.state.motor_state[j].q
+
+        q_target = q_start.copy()
+        for j, deg in target_deg.items():
+            q_target[j] = np.deg2rad(deg)
+
+        steps_ramp = int(ramp_time * fps)
+        for i in range(steps_ramp + 1):
+            w = i / steps_ramp
+            self._write(q_start, w)
+            time.sleep(1.0/fps)
+
+        steps_move = int(duration * fps)
+        for i in range(steps_move + 1):
+            r = i / steps_move
+            q_now = q_start * (1-r) + q_target * r
+            self._write(q_now, 1.0)
+            time.sleep(1.0/fps)
+
+        time.sleep(0.3)
+
+        for i in range(steps_ramp, -1, -1):
+            w = i / steps_ramp
+            self._write(q_target, w)
+            time.sleep(1.0/fps)
+
+        print("动作完成，控制权已平滑交回。")
+
+def main():
+    print("=== 安全手臂测试（仅左肩极小幅度） ===")
+    print("前提：机器人已通过 L1+A -> L1+UP -> R1+X 进入 Locked Standing + 运动控制模式。")
+    print("请确保急停在手，手臂运动范围内无人。")
+    input("按 Enter 开始...")
+    ctrl = SafeArmController("eth0")
+    ctrl.move_safe({15: 15}, duration=2.0, ramp_time=1.5)
+    print("测试结束。")
+
+if __name__ == "__main__":
+    main()
+```
+
+## 18. `g1_left_arm_calib.py` — 已保存，**部分实测**（15 向前正确；16 负值外展不可靠）
+
+```python
+#!/usr/bin/env python3
+"""
+g1_left_arm_calib.py — 单左臂关节校准测试（锁定右臂 + 腰部）。
+用法:
+  python3 g1_left_arm_calib.py --joint 15 --delta 30
+  python3 g1_left_arm_calib.py --joint 16 --delta -15
+"""
+import time, math, argparse
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_PITCH = 15
+LEFT_ROLL  = 16
+LEFT_YAW   = 17
+LEFT_ELBOW = 18
+RIGHT_ALL  = list(range(22, 29))
+WAIST_JOINTS = [12, 13, 14]
+K_ARM_WEIGHT = 29
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--joint", type=int, default=16, choices=[15,16,17,18])
+    p.add_argument("--delta", type=float, default=-15.0)
+    p.add_argument("--weight", type=float, default=0.4)
+    p.add_argument("--duration", type=float, default=2.5)
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    state = {"msg": None}
+    sub = ChannelSubscriber("rt/lowstate", LowState_)
+    sub.Init(lambda m: state.__setitem__("msg", m), 10)
+    t0 = time.time()
+    while state["msg"] is None and time.time() - t0 < 5.0:
+        time.sleep(0.05)
+    if state["msg"] is None:
+        raise RuntimeError("未收到 lowstate")
+    msg0 = state["msg"]
+
+    q0 = msg0.motor_state[a.joint].q
+    delta_rad = np.deg2rad(a.delta)
+    q_target = q0 + delta_rad
+
+    if a.joint == LEFT_ROLL:
+        q_target = np.clip(q_target, -0.34, 3.11)
+    elif a.joint == LEFT_PITCH:
+        q_target = np.clip(q_target, -2.87, 2.87)
+
+    print(f"关节 {a.joint}: q0 = {q0:.4f} rad, 目标 = {q_target:.4f} rad, Δ = {a.delta}°, 权重上限 = {a.weight}")
+
+    pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+    pub.Init()
+    crc = CRC()
+    cmd = unitree_hg_msg_dds__LowCmd_()
+    lock_q = {j: msg0.motor_state[j].q for j in RIGHT_ALL + WAIST_JOINTS}
+
+    def tilt_rad(m):
+        qw, qx, qy, qz = m.imu_state.quaternion
+        gz = 1 - 2*(qx*qx + qy*qy)
+        return math.acos(max(-1.0, min(1.0, gz)))
+
+    def safe_write(q_left, weight):
+        m = state["msg"]
+        if m is None: return False
+        if tilt_rad(m) > 0.6:
+            print("⚠️ 倾斜超限，停止。"); return False
+        cmd.motor_cmd[K_ARM_WEIGHT].q = float(np.clip(weight, 0.0, a.weight))
+        cmd.motor_cmd[K_ARM_WEIGHT].kp = 0.0
+        cmd.motor_cmd[K_ARM_WEIGHT].kd = 0.0
+        cmd.motor_cmd[K_ARM_WEIGHT].tau = 0.0
+        for j in RIGHT_ALL:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = lock_q[j]
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 30.0
+            cmd.motor_cmd[j].kd = 1.0
+        for j in WAIST_JOINTS:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = lock_q[j]
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 50.0
+            cmd.motor_cmd[j].kd = 1.0
+        cmd.motor_cmd[a.joint].mode = 1
+        cmd.motor_cmd[a.joint].q = float(q_left)
+        cmd.motor_cmd[a.joint].dq = 0.0
+        cmd.motor_cmd[a.joint].tau = 0.0
+        cmd.motor_cmd[a.joint].kp = 40.0
+        cmd.motor_cmd[a.joint].kd = 1.5
+        for j in [15,16,17,18,19,20,21]:
+            if j == a.joint: continue
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = msg0.motor_state[j].q
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 20.0
+            cmd.motor_cmd[j].kd = 1.0
+        cmd.crc = crc.Crc(cmd)
+        pub.Write(cmd)
+        return True
+
+    def ramp(q_from, q_to, w_from, w_to, sec):
+        n = max(1, int(sec * 50))
+        for i in range(n + 1):
+            r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+            if not safe_write(q_from + (q_to-q_from)*r, w_from + (w_to-w_from)*r):
+                safe_write(q0, 0.0)
+                time.sleep(0.3)
+                raise RuntimeError("安全中止")
+            time.sleep(0.02)
+
+    print("\n⚠️ 5 秒后开始。")
+    for i in (5,4,3,2,1):
+        print(f"  {i}..."); time.sleep(1.0)
+
+    try:
+        ramp(q0, q0, 0.0, a.weight, 1.5)
+        ramp(q0, q_target, a.weight, a.weight, a.duration)
+        time.sleep(0.5)
+        ramp(q_target, q0, a.weight, a.weight, a.duration)
+        ramp(q0, q0, a.weight, 0.0, 1.5)
+        print("✅ 测试完成。")
+    except Exception as e:
+        print(f"❌ 中止: {e}")
+        safe_write(q0, 0.0)
+        time.sleep(0.3)
+
+    pub.Close()
+    sub.Close()
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+# 五、仅存在于 heredoc、未保存为文件的脚本
+
+## 19. E1：单左臂 -25°（“先弯腰再抬臂”版本）— **未保存为文件；实测**
+
+```python
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+JOINT = 15
+DELTA_DEG = -25.0
+MAX_WEIGHT = 0.35
+DURATION = 3.0
+FPS = 50
+LOCK_JOINTS = [12] + list(range(22, 29))
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+q0 = msg0.motor_state[JOINT].q
+q_target = q0 + np.deg2rad(DELTA_DEG)
+lock_q = {j: msg0.motor_state[j].q for j in LOCK_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+pub.Init()
+crc = CRC()
+cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    gz = 1 - 2*(qx*qx + qy*qy)
+    return math.acos(max(-1, min(1, gz)))
+
+def write(q_arm, weight):
+    m = state["msg"]
+    if m is None: return False
+    if tilt(m) > 0.7:
+        print("⚠️ 倾斜超限"); return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in LOCK_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = lock_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 30; cmd.motor_cmd[j].kd = 1
+    cmd.motor_cmd[JOINT].mode = 1
+    cmd.motor_cmd[JOINT].q = float(q_arm)
+    cmd.motor_cmd[JOINT].dq = 0; cmd.motor_cmd[JOINT].tau = 0
+    cmd.motor_cmd[JOINT].kp = 35; cmd.motor_cmd[JOINT].kd = 1.5
+    for j in [16, 17, 18, 19, 20, 21]:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = msg0.motor_state[j].q
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 15; cmd.motor_cmd[j].kd = 1
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    return True
+
+def ramp(qa, qb, wa, wb, sec):
+    n = max(1, int(sec * FPS))
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        if not write(qa + (qb - qa) * r, wa + (wb - wa) * r):
+            write(q0, 0.0); time.sleep(0.5)
+            raise RuntimeError("安全中止")
+        time.sleep(1.0 / FPS)
+
+print("\n5 秒后开始。")
+for i in (5, 4, 3, 2, 1):
+    print(f"  {i}..."); time.sleep(1)
+
+try:
+    ramp(q0, q0, 0.0, MAX_WEIGHT, 2.0)
+    ramp(q0, q_target, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    time.sleep(1.0)
+    ramp(q_target, q0, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    ramp(q0, q0, MAX_WEIGHT, 0.0, 2.0)
+    for _ in range(20):
+        write(q0, 0.0); time.sleep(0.02)
+    print("✅ 完成。")
+except Exception as e:
+    print(f"❌ 中止: {e}")
+    for _ in range(20):
+        write(q0, 0.0); time.sleep(0.02)
+
+pub.Close()
+sub.Close()
+```
+
+## 20. E2：单左臂 -40°、权重 0.8、带实际角度回读 — **未保存为文件；实测**
+
+```python
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+JOINT = 15
+DELTA_DEG = -40.0
+MAX_WEIGHT = 0.8
+DURATION = 3.0
+FPS = 50
+LOCK_JOINTS = [12, 13, 14] + list(range(22, 29))
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+q0 = msg0.motor_state[JOINT].q
+q_target = q0 + np.deg2rad(DELTA_DEG)
+lock_q = {j: msg0.motor_state[j].q for j in LOCK_JOINTS}
+
+print(f"LeftShoulderPitch(15): 起始 {np.rad2deg(q0):.2f}° -> 目标 {np.rad2deg(q_target):.2f}° (Δ={DELTA_DEG}°)")
+print(f"权重上限: {MAX_WEIGHT}")
+print("运行中每 0.5s 打印实际 q 值，观察手臂是否真的在动。")
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_); pub.Init()
+crc = CRC(); cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    return math.acos(max(-1, min(1, 1 - 2*(qx*qx + qy*qy))))
+
+def write(q_arm, weight):
+    m = state["msg"]
+    if m is None or tilt(m) > 0.7:
+        return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in LOCK_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = lock_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 50; cmd.motor_cmd[j].kd = 1.5
+    cmd.motor_cmd[JOINT].mode = 1
+    cmd.motor_cmd[JOINT].q = float(q_arm)
+    cmd.motor_cmd[JOINT].dq = 0; cmd.motor_cmd[JOINT].tau = 0
+    cmd.motor_cmd[JOINT].kp = 35; cmd.motor_cmd[JOINT].kd = 1.5
+    for j in [16, 17, 18, 19, 20, 21]:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = msg0.motor_state[j].q
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 15; cmd.motor_cmd[j].kd = 1
+    cmd.crc = crc.Crc(cmd); pub.Write(cmd); return True
+
+def ramp(qa, qb, wa, wb, sec, label=""):
+    n = max(1, int(sec * FPS))
+    print(f"\n[{label}] 开始")
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        q_cmd = qa + (qb - qa) * r
+        if not write(q_cmd, wa + (wb - wa) * r):
+            print("⚠️ 安全中止"); return False
+        if i % int(FPS * 0.5) == 0:
+            q_actual = state["msg"].motor_state[JOINT].q
+            print(f"  t={i/FPS:.1f}s  指令={np.rad2deg(q_cmd):.1f}°  实际={np.rad2deg(q_actual):.1f}°")
+        time.sleep(1 / FPS)
+    return True
+
+print("\n5 秒后开始。盯住左臂，并观察终端实际角度变化。")
+for i in (5, 4, 3, 2, 1):
+    print(f"  {i}..."); time.sleep(1)
+
+try:
+    if not ramp(q0, q0, 0, MAX_WEIGHT, 1.5, "权重上升"):
+        raise RuntimeError("权重上升失败")
+    if not ramp(q0, q_target, MAX_WEIGHT, MAX_WEIGHT, DURATION, "向前移动"):
+        raise RuntimeError("移动失败")
+    time.sleep(0.5)
+    if not ramp(q_target, q0, MAX_WEIGHT, MAX_WEIGHT, DURATION, "返回"):
+        raise RuntimeError("返回失败")
+    ramp(q0, q0, MAX_WEIGHT, 0, 1.5, "释放")
+    print("\n✅ 完成。对比指令值和实际值的差距。")
+except Exception as e:
+    print(f"❌ 中止: {e}")
+    for _ in range(20):
+        write(q0, 0.0); time.sleep(0.02)
+
+pub.Close(); sub.Close()
+```
+
+## 21. E3：双臂 -60°、腰部 kp=50、全量快照 — **未保存为文件；实测**
+
+```python
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_SHOULDER, RIGHT_SHOULDER = 15, 22
+DELTA_DEG = -60.0
+MAX_WEIGHT = 1.0
+DURATION = 4.0
+FPS = 50
+
+WAIST_LOCK = [12, 13, 14]
+LEFT_OTHER  = [16, 17, 18, 19, 20, 21]
+RIGHT_OTHER = [23, 24, 25, 26, 27, 28]
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+ql0 = msg0.motor_state[LEFT_SHOULDER].q
+ql_t = ql0 + np.deg2rad(DELTA_DEG)
+qr0 = msg0.motor_state[RIGHT_SHOULDER].q
+qr_t = qr0 + np.deg2rad(DELTA_DEG)
+waist_q = {j: msg0.motor_state[j].q for j in WAIST_LOCK}
+left_keep  = {j: msg0.motor_state[j].q for j in LEFT_OTHER}
+right_keep = {j: msg0.motor_state[j].q for j in RIGHT_OTHER}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+pub.Init()
+crc = CRC()
+cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    return math.acos(max(-1, min(1, 1 - 2*(qx*qx + qy*qy))))
+
+def write(ql, qr, weight):
+    m = state["msg"]
+    if m is None or tilt(m) > 0.7:
+        return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in WAIST_LOCK:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = waist_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 50; cmd.motor_cmd[j].kd = 1.5
+    cmd.motor_cmd[LEFT_SHOULDER].mode = 1
+    cmd.motor_cmd[LEFT_SHOULDER].q = float(ql)
+    cmd.motor_cmd[LEFT_SHOULDER].dq = 0; cmd.motor_cmd[LEFT_SHOULDER].tau = 0
+    cmd.motor_cmd[LEFT_SHOULDER].kp = 35; cmd.motor_cmd[LEFT_SHOULDER].kd = 1.5
+    cmd.motor_cmd[RIGHT_SHOULDER].mode = 1
+    cmd.motor_cmd[RIGHT_SHOULDER].q = float(qr)
+    cmd.motor_cmd[RIGHT_SHOULDER].dq = 0; cmd.motor_cmd[RIGHT_SHOULDER].tau = 0
+    cmd.motor_cmd[RIGHT_SHOULDER].kp = 35; cmd.motor_cmd[RIGHT_SHOULDER].kd = 1.5
+    for j in LEFT_OTHER:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = left_keep[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 15; cmd.motor_cmd[j].kd = 1
+    for j in RIGHT_OTHER:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = right_keep[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 15; cmd.motor_cmd[j].kd = 1
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    return True
+
+def ramp(ql_a, ql_b, qr_a, qr_b, wa, wb, sec):
+    n = max(1, int(sec * FPS))
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        if not write(ql_a + (ql_b - ql_a) * r, qr_a + (qr_b - qr_a) * r, wa + (wb - wa) * r):
+            print("⚠️ 安全中止"); return False
+        time.sleep(1 / FPS)
+    return True
+
+print("\n5 秒后开始。双臂 -60°，腰部 kp=50。")
+for i in (5, 4, 3, 2, 1):
+    print(f"  {i}..."); time.sleep(1)
+
+try:
+    ramp(ql0, ql0, qr0, qr0, 0, MAX_WEIGHT, 2.0)
+    ramp(ql0, ql_t, qr0, qr_t, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    time.sleep(0.8)
+    ramp(ql_t, ql0, qr_t, qr0, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    ramp(ql0, ql0, qr0, qr0, MAX_WEIGHT, 0, 2.0)
+    print("✅ 完成。")
+except Exception as e:
+    print(f"❌ 中止: {e}")
+    for _ in range(20):
+        write(ql0, qr0, 0.0); time.sleep(0.02)
+
+pub.Close()
+sub.Close()
+```
+
+实测关键数据：`WaistYaw -0.932°→-4.036°`；`WaistRoll -0.426°→-8.843°`；`WaistPitch -2.285°→+31.462°`；双肩实际约 -46°/-47°。
+
+## 22. E4：最终双臂 -80°、腰部 kp=150、实时监控 — **未保存为文件；实测**
+
+```python
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_SHOULDER, RIGHT_SHOULDER = 15, 22
+DELTA_DEG = -80.0
+MAX_WEIGHT = 1.0
+FPS = 50
+PRINT_HZ = 10
+
+WAIST_JOINTS = [12, 13, 14]
+WAIST_KP = 150.0
+WAIST_KD = 3.0
+LEFT_OTHER = [16,17,18,19,20,21]
+RIGHT_OTHER = list(range(23, 29))
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0: time.sleep(0.05)
+if state["msg"] is None: raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+ql0 = msg0.motor_state[LEFT_SHOULDER].q; ql_t = ql0 + np.deg2rad(DELTA_DEG)
+qr0 = msg0.motor_state[RIGHT_SHOULDER].q; qr_t = qr0 + np.deg2rad(DELTA_DEG)
+waist_lock_q = {j: msg0.motor_state[j].q for j in WAIST_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_); pub.Init()
+crc = CRC(); cmd = unitree_hg_msg_dds__LowCmd_()
+
+def write(ql, qr, w):
+    m = state["msg"]
+    if m is None: return False
+    cmd.motor_cmd[29].q = float(np.clip(w, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp=0; cmd.motor_cmd[29].kd=0; cmd.motor_cmd[29].tau=0
+    for j in WAIST_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = waist_lock_q[j]
+        cmd.motor_cmd[j].dq = 0.0; cmd.motor_cmd[j].tau = 0.0
+        cmd.motor_cmd[j].kp = WAIST_KP
+        cmd.motor_cmd[j].kd = WAIST_KD
+    cmd.motor_cmd[LEFT_SHOULDER].mode=1; cmd.motor_cmd[LEFT_SHOULDER].q=float(ql)
+    cmd.motor_cmd[LEFT_SHOULDER].dq=0; cmd.motor_cmd[LEFT_SHOULDER].tau=0
+    cmd.motor_cmd[LEFT_SHOULDER].kp=35; cmd.motor_cmd[LEFT_SHOULDER].kd=1.5
+    cmd.motor_cmd[RIGHT_SHOULDER].mode=1; cmd.motor_cmd[RIGHT_SHOULDER].q=float(qr)
+    cmd.motor_cmd[RIGHT_SHOULDER].dq=0; cmd.motor_cmd[RIGHT_SHOULDER].tau=0
+    cmd.motor_cmd[RIGHT_SHOULDER].kp=35; cmd.motor_cmd[RIGHT_SHOULDER].kd=1.5
+    for j in LEFT_OTHER + RIGHT_OTHER:
+        cmd.motor_cmd[j].mode=1; cmd.motor_cmd[j].q=msg0.motor_state[j].q
+        cmd.motor_cmd[j].dq=0; cmd.motor_cmd[j].tau=0
+        cmd.motor_cmd[j].kp=15; cmd.motor_cmd[j].kd=1
+    cmd.crc=crc.Crc(cmd); pub.Write(cmd); return True
+
+def print_monitor(tag):
+    m = state["msg"]
+    if m is None: return
+    print(f"\n--- [{tag}] ---")
+    print(f"{'idx':>3} {'name':<14} {'q(deg)':>9} {'dq':>9} {'tau':>9}")
+    for j, name in [(12,"WaistYaw"), (13,"WaistRoll"), (14,"WaistPitch"),
+                    (15,"L_ShoulderPitch"), (22,"R_ShoulderPitch")]:
+        ms = m.motor_state[j]
+        print(f"{j:>3} {name:<14} {np.rad2deg(ms.q):>9.2f} {ms.dq:>9.4f} {ms.tau_est:>9.4f}")
+
+def ramp(ql_a, ql_b, qr_a, qr_b, sec, label):
+    n = max(1, int(sec * FPS))
+    print(f"\n[{label}]")
+    last_print = 0.0
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        if not write(ql_a + (ql_b - ql_a) * r, qr_a + (qr_b - qr_a) * r, MAX_WEIGHT):
+            return False
+        now = time.time()
+        if now - last_print >= 1.0 / PRINT_HZ:
+            print_monitor(label)
+            last_print = now
+        time.sleep(1 / FPS)
+    return True
+
+print("=" * 60)
+print("最后一轮：-80° 大幅前伸 + 腰部/手部实时监控")
+print("=" * 60)
+print("5 秒后开始。请确保有人扶持、急停在手、周围清空。")
+for i in (5,4,3,2,1): print(f"  {i}..."); time.sleep(1)
+
+try:
+    ramp(ql0, ql0, qr0, qr0, 1.0, "权重上升")
+    ramp(ql0, ql_t, qr0, qr_t, 4.0, "手臂前伸 -80°")
+    time.sleep(0.5)
+    ramp(ql_t, ql0, qr_t, qr0, 4.0, "返回")
+    for _ in range(20): write(ql0, qr0, 0); time.sleep(0.02)
+    print("\n✅ 最后一轮测试完成。")
+except Exception as e:
+    print(f"❌ {e}")
+    for _ in range(20): write(ql0, qr0, 0); time.sleep(0.02)
+
+pub.Close()
+sub.Close()
+```
+
+实测关键数据：第一帧 `12 -0.17° / 13 0.00° / 14 -3.09°`；结束 `12 -0.16° / 13 0.05° / 14 +3.21°`；双肩约 -57.35°/-58.46°；`WaistPitch tau_est` 约 -16.14 ~ -16.56。
+
+## 23. E5：逐电机扫描 15–28 — **未保存为文件；实测全部映射正确**
+
+```python
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+JOINT_NAMES = {
+    15: "L_ShoulderPitch", 16: "L_ShoulderRoll", 17: "L_ShoulderYaw",
+    18: "L_Elbow", 19: "L_WristRoll", 20: "L_WristPitch", 21: "L_WristYaw",
+    22: "R_ShoulderPitch", 23: "R_ShoulderRoll", 24: "R_ShoulderYaw",
+    25: "R_Elbow", 26: "R_WristRoll", 27: "R_WristPitch", 28: "R_WristYaw",
+}
+SCAN_JOINTS = sorted(JOINT_NAMES.keys())
+DELTA_DEG = 15.0
+MAX_WEIGHT = 1.0
+HOLD_SEC = 1.0
+FPS = 50
+LOCK_JOINTS = [12]
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+lock_q = {j: msg0.motor_state[j].q for j in LOCK_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+pub.Init()
+crc = CRC()
+cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    return math.acos(max(-1, min(1, 1 - 2*(qx*qx + qy*qy))))
+
+def write(target_q_dict, weight):
+    m = state["msg"]
+    if m is None or tilt(m) > 0.8:
+        return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in LOCK_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = lock_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 50; cmd.motor_cmd[j].kd = 1.5
+    for j in SCAN_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = float(target_q_dict.get(j, msg0.motor_state[j].q))
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 30; cmd.motor_cmd[j].kd = 1.5
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    return True
+
+def ramp_to(target_j, target_q, weight, sec):
+    q_start = state["msg"].motor_state[target_j].q
+    n = max(1, int(sec * FPS))
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        q_cmd = q_start + (target_q - q_start) * r
+        if not write({target_j: q_cmd}, weight):
+            return False
+        time.sleep(1 / FPS)
+    return True
+
+for j in SCAN_JOINTS:
+    q0 = state["msg"].motor_state[j].q
+    q_t = q0 + np.deg2rad(DELTA_DEG)
+    print(f"\n--- 索引 {j}: {JOINT_NAMES[j]} ---")
+    print(f"  起始 {np.rad2deg(q0):.2f}° → 目标 {np.rad2deg(q_t):.2f}°")
+    if not ramp_to(j, q0, MAX_WEIGHT, 0.8):
+        print("  ⚠️ 权重升起失败"); continue
+    if not ramp_to(j, q_t, MAX_WEIGHT, 1.5):
+        print("  ⚠️ 移动失败"); continue
+    time.sleep(HOLD_SEC)
+    q_act = state["msg"].motor_state[j].q
+    print(f"  保持后实际 {np.rad2deg(q_act):.2f}°  (跟踪量 {np.rad2deg(q_act - q0):.2f}°)")
+    ramp_to(j, q0, MAX_WEIGHT, 1.5)
+    time.sleep(0.3)
+
+write({}, 0.0)
+time.sleep(0.5)
+print("\n✅ 扫描完成。")
+pub.Close()
+sub.Close()
+```
+
+实测跟踪量：15 `18.71°`、16 `10.58°`、17 `14.69°`、18 `15.78°`、19 `14.40°`、20 `15.08°`、21 `14.73°`、22 `18.23°`、23 `5.74°`、24 `15.13°`、25 `15.97°`、26 `14.70°`、27 `15.05°`、28 `14.83°`。
+
+## 24. E6：`MotionSwitcherClient.CheckMode()` — **未保存为文件；实测**
+
+```python
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwitcherClient
+
+ChannelFactoryInitialize(0, "eth0")
+msc = MotionSwitcherClient()
+msc.SetTimeout(10.0)
+msc.Init() if hasattr(msc, "Init") else None
+status, result = msc.CheckMode()
+print(f"CheckMode -> status={status}, result={result}")
+print(f"当前模式: {result.get('name', 'N/A')}")
+current = result.get("name", "")
+if current != "ai":
+    sret, sresult = msc.SelectMode(nameOrAlias="ai")
+    print(f"SelectMode('ai') -> status={sret}, result={sresult}")
+else:
+    print("✅ 当前已经是 ai 模式。")
+```
+
+实测输出：`CheckMode -> status=0, result={'form':'0','name':'ai'}`。
+
+## 25. E7：`SetFsmId(501)` + `SetVelocity` — **未保存为文件；实测**
+
+```python
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+ChannelFactoryInitialize(0, "eth0")
+c = LocoClient()
+c.SetTimeout(10.0)
+c.Init() if hasattr(c, "Init") else None
+
+for fsm in [501, 801]:
+    print(f"尝试 SetFsmId({fsm}) ...")
+    ret = c.SetFsmId(fsm)
+    print(f"  返回: {ret}")
+    if ret == 0:
+        time.sleep(1.0)
+        print(f"  现在尝试 SetVelocity(0.05, 0, 0, 0.3) ...")
+        vret = c.SetVelocity(0.05, 0.0, 0.0, 0.3)
+        print(f"  SetVelocity 返回: {vret}")
+        time.sleep(0.5)
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5)
+        print("  已发送停止。")
+        break
+```
+
+实测输出：`SetFsmId(501) 返回: 0`；`SetVelocity 返回: 0`；机器人播报“已进入常规运动模式”。
+
+## 26. E8：`G1ArmActionClient` — **未保存为文件；口述成功，无 FSM 日志**
+
+```python
+import time
+from unitree_sdk2py.g1.arm.g1_arm_action_client import G1ArmActionClient
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+
+ChannelFactoryInitialize(0, "eth0")
+c = G1ArmActionClient()
+c.SetTimeout(10.0)
+c.Init()
+
+print("执行 high wave (ID 26) ...")
+ret = c.ExecuteAction(26)
+print(f"返回: {ret}")
+time.sleep(3.0)
+print("释放动作 (ID 99) ...")
+c.ExecuteAction(99)
+print("完成。")
+```
+
+25/15 的脚本同构，仅 `ExecuteAction(26)` 改为 `ExecuteAction(25)` / `ExecuteAction(15)`。
+
+## 27. E9：只读 `mode_machine` — **未保存为文件；实测**
+
+```python
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_
+
+ChannelFactoryInitialize(0, "eth0")
+latest = {"msg": None}
+def handler(msg): latest["msg"] = msg
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(handler, 10)
+time.sleep(1.0)
+
+m = latest["msg"]
+if m is None:
+    print("未收到 lowstate")
+else:
+    print(f"mode_machine = {m.mode_machine}")
+    print(f"mode_pr      = {m.mode_pr}")
+    for idx, name in [(12, "WaistYaw"), (13, "WaistRoll"), (14, "WaistPitch")]:
+        print(f"  idx{idx} {name:12s}: q = {m.motor_state[idx].q:.4f}")
+sub.Close()
+```
+
+实测输出：`mode_machine = 5`；`mode_pr = 0`；`WaistYaw q=0.0022`；`WaistRoll q=0.0149`；`WaistPitch q=-0.0605`。
+
+---
+
+# 状态汇总
+
+| 编号 | 文件/脚本 | 形式 | 真机状态 |
+|---|---|---|---|
+| 1 | `g1_stand_from_lie_safe.py` | 已保存 | **实测通过** |
+| 2 | `prepare_walk.py` 第一版 | 已保存 | AttributeError，**废弃** |
+| 3 | `prepare_walk.py` 第二版 | 已保存 | 返回 0，无位移，非最终 |
+| 4 | `move_pulse.py` 第一版 | 已保存 | 有 `GetFsmId`，会报错，**废弃** |
+| 5 | `move_pulse.py` 第二版 | 已保存 | 返回 0，无位移，早期尝试 |
+| 6 | `g1_leg_module.py` | 已保存 | 未独立复测，封装有效调用 |
+| 7–10 | `g1_forward/backward/left/right.py` | 仅保存命令 | 未确认存在，无运行 |
+| 11 | `g1_arm_base.py` | 已保存 | 事故相关，**废弃** |
+| 12–16 | `g1_arm_lift_*.py`（5 个） | 已保存 | 未安全验证，**废弃** |
+| 17 | `g1_arm_safe.py` | 已保存 | 未真机运行 |
+| 18 | `g1_left_arm_calib.py` | 已保存 | 部分实测；16 不可靠 |
+| 19 | E1 单臂 -25° | heredoc | 实测，**未保存** |
+| 20 | E2 单臂 -40°@0.8 | heredoc | 实测，**未保存** |
+| 21 | E3 双臂 -60°@kp50 | heredoc | 实测，**未保存** |
+| 22 | E4 双臂 -80°@kp150 | heredoc | 实测，**未保存** |
+| 23 | E5 逐电机扫描 | heredoc | 实测，**未保存** |
+| 24 | E6 MotionSwitcher | heredoc | 实测，**未保存** |
+| 25 | E7 FSM501 测试 | heredoc | 实测，**未保存** |
+| 26 | E8 ArmAction | heredoc | 口述成功，**未保存** |
+| 27 | E9 mode_machine 只读 | heredoc | 实测，**未保存** |
+
+**缺失项**：`L2+A` 按键事件、进入 501 后的 `robot._Call(7001,"{}")` 回读、后退/左移/右移/旋转终端输出、第一次跌倒现场日志、`ArmAction` 执行时 FSM/`mode_machine`、12/13/14 目标是否被底层接受的服务级证据。heredoc 脚本若终端历史已清空则无法恢复；我未重写。

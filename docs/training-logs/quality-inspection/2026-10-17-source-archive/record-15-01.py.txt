@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""左臂向前: 左肩 Yaw 40°, Pitch 20°。"""
+from g1_arm_base import run_arm_action, LEFT_ARM
+
+target = {LEFT_ARM[0]: 20, LEFT_ARM[2]: 40}
+run_arm_action(target, duration=2.0, hold=1.0)

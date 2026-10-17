@@ -1,0 +1,93 @@
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+JOINT = 15
+DELTA_DEG = -25.0
+MAX_WEIGHT = 0.35
+DURATION = 3.0
+FPS = 50
+LOCK_JOINTS = [12] + list(range(22, 29))
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+q0 = msg0.motor_state[JOINT].q
+q_target = q0 + np.deg2rad(DELTA_DEG)
+lock_q = {j: msg0.motor_state[j].q for j in LOCK_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+pub.Init()
+crc = CRC()
+cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    gz = 1 - 2*(qx*qx + qy*qy)
+    return math.acos(max(-1, min(1, gz)))
+
+def write(q_arm, weight):
+    m = state["msg"]
+    if m is None: return False
+    if tilt(m) > 0.7:
+        print("⚠️ 倾斜超限"); return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in LOCK_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = lock_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 30; cmd.motor_cmd[j].kd = 1
+    cmd.motor_cmd[JOINT].mode = 1
+    cmd.motor_cmd[JOINT].q = float(q_arm)
+    cmd.motor_cmd[JOINT].dq = 0; cmd.motor_cmd[JOINT].tau = 0
+    cmd.motor_cmd[JOINT].kp = 35; cmd.motor_cmd[JOINT].kd = 1.5
+    for j in [16, 17, 18, 19, 20, 21]:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = msg0.motor_state[j].q
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 15; cmd.motor_cmd[j].kd = 1
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    return True
+
+def ramp(qa, qb, wa, wb, sec):
+    n = max(1, int(sec * FPS))
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        if not write(qa + (qb - qa) * r, wa + (wb - wa) * r):
+            write(q0, 0.0); time.sleep(0.5)
+            raise RuntimeError("安全中止")
+        time.sleep(1.0 / FPS)
+
+print("\n5 秒后开始。")
+for i in (5, 4, 3, 2, 1):
+    print(f"  {i}..."); time.sleep(1)
+
+try:
+    ramp(q0, q0, 0.0, MAX_WEIGHT, 2.0)
+    ramp(q0, q_target, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    time.sleep(1.0)
+    ramp(q_target, q0, MAX_WEIGHT, MAX_WEIGHT, DURATION)
+    ramp(q0, q0, MAX_WEIGHT, 0.0, 2.0)
+    for _ in range(20):
+        write(q0, 0.0); time.sleep(0.02)
+    print("✅ 完成。")
+except Exception as e:
+    print(f"❌ 中止: {e}")
+    for _ in range(20):
+        write(q0, 0.0); time.sleep(0.02)
+
+pub.Close()
+sub.Close()

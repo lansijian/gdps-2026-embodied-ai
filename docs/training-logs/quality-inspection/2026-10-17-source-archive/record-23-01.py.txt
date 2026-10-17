@@ -1,0 +1,92 @@
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+JOINT_NAMES = {
+    15: "L_ShoulderPitch", 16: "L_ShoulderRoll", 17: "L_ShoulderYaw",
+    18: "L_Elbow", 19: "L_WristRoll", 20: "L_WristPitch", 21: "L_WristYaw",
+    22: "R_ShoulderPitch", 23: "R_ShoulderRoll", 24: "R_ShoulderYaw",
+    25: "R_Elbow", 26: "R_WristRoll", 27: "R_WristPitch", 28: "R_WristYaw",
+}
+SCAN_JOINTS = sorted(JOINT_NAMES.keys())
+DELTA_DEG = 15.0
+MAX_WEIGHT = 1.0
+HOLD_SEC = 1.0
+FPS = 50
+LOCK_JOINTS = [12]
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0:
+    time.sleep(0.05)
+if state["msg"] is None:
+    raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+lock_q = {j: msg0.motor_state[j].q for j in LOCK_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+pub.Init()
+crc = CRC()
+cmd = unitree_hg_msg_dds__LowCmd_()
+
+def tilt(m):
+    qw, qx, qy, qz = m.imu_state.quaternion
+    return math.acos(max(-1, min(1, 1 - 2*(qx*qx + qy*qy))))
+
+def write(target_q_dict, weight):
+    m = state["msg"]
+    if m is None or tilt(m) > 0.8:
+        return False
+    cmd.motor_cmd[29].q = float(np.clip(weight, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp = 0; cmd.motor_cmd[29].kd = 0; cmd.motor_cmd[29].tau = 0
+    for j in LOCK_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = lock_q[j]
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 50; cmd.motor_cmd[j].kd = 1.5
+    for j in SCAN_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = float(target_q_dict.get(j, msg0.motor_state[j].q))
+        cmd.motor_cmd[j].dq = 0; cmd.motor_cmd[j].tau = 0
+        cmd.motor_cmd[j].kp = 30; cmd.motor_cmd[j].kd = 1.5
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    return True
+
+def ramp_to(target_j, target_q, weight, sec):
+    q_start = state["msg"].motor_state[target_j].q
+    n = max(1, int(sec * FPS))
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        q_cmd = q_start + (target_q - q_start) * r
+        if not write({target_j: q_cmd}, weight):
+            return False
+        time.sleep(1 / FPS)
+    return True
+
+for j in SCAN_JOINTS:
+    q0 = state["msg"].motor_state[j].q
+    q_t = q0 + np.deg2rad(DELTA_DEG)
+    print(f"\n--- 索引 {j}: {JOINT_NAMES[j]} ---")
+    print(f"  起始 {np.rad2deg(q0):.2f}° → 目标 {np.rad2deg(q_t):.2f}°")
+    if not ramp_to(j, q0, MAX_WEIGHT, 0.8):
+        print("  ⚠️ 权重升起失败"); continue
+    if not ramp_to(j, q_t, MAX_WEIGHT, 1.5):
+        print("  ⚠️ 移动失败"); continue
+    time.sleep(HOLD_SEC)
+    q_act = state["msg"].motor_state[j].q
+    print(f"  保持后实际 {np.rad2deg(q_act):.2f}°  (跟踪量 {np.rad2deg(q_act - q0):.2f}°)")
+    ramp_to(j, q0, MAX_WEIGHT, 1.5)
+    time.sleep(0.3)
+
+write({}, 0.0)
+time.sleep(0.5)
+print("\n✅ 扫描完成。")
+pub.Close()
+sub.Close()

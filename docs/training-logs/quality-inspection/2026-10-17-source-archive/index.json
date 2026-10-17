@@ -1,0 +1,251 @@
+{
+  "source_sha256": "d4b4a04861f3b8f67a4e132891f2f27b88e259f73c13c0a70e699b31468c27e0",
+  "source": "operator-code-verbatim.txt",
+  "authority": "user-pasted historical record, not independent telemetry",
+  "execute_allowed": false,
+  "records": [
+    {
+      "id": 1,
+      "original_status_heading": "`g1_stand_from_lie_safe.py` — 已保存，**真机实测通过**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-01-01.py.txt"
+      ]
+    },
+    {
+      "id": 2,
+      "original_status_heading": "`prepare_walk.py` 第一版 — 已保存，**真机报 AttributeError**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-02-01.py.txt"
+      ]
+    },
+    {
+      "id": 3,
+      "original_status_heading": "`prepare_walk.py` 第二版 — 已保存，**实测 SetFsmId(500)=0 / SetBalanceMode(1)=0，无位移**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-03-01.py.txt"
+      ]
+    },
+    {
+      "id": 4,
+      "original_status_heading": "`move_pulse.py` 第一版 — 已保存，**有 `GetFsmId()`，会报 AttributeError**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-04-01.py.txt"
+      ]
+    },
+    {
+      "id": 5,
+      "original_status_heading": "`move_pulse.py` 第二版 — 已保存，**实测 SetVelocity=0 但无位移**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-05-01.py.txt"
+      ]
+    },
+    {
+      "id": 6,
+      "original_status_heading": "`g1_leg_module.py` — 已保存，**语法 OK；未独立真机复测脉冲**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-06-01.py.txt"
+      ]
+    },
+    {
+      "id": 7,
+      "original_status_heading": "`g1_forward.py` — 仅保存命令，**未确认文件存在，无运行记录**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-07-01.py.txt"
+      ]
+    },
+    {
+      "id": 8,
+      "original_status_heading": "`g1_backward.py` — 仅保存命令，**未确认文件存在，无运行记录**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-08-01.py.txt"
+      ]
+    },
+    {
+      "id": 9,
+      "original_status_heading": "`g1_left.py` — 仅保存命令，**未确认文件存在，无运行记录**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-09-01.py.txt"
+      ]
+    },
+    {
+      "id": 10,
+      "original_status_heading": "`g1_right.py` — 仅保存命令，**未确认文件存在，无运行记录**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-10-01.py.txt"
+      ]
+    },
+    {
+      "id": 11,
+      "original_status_heading": "`g1_arm_base.py` — 已保存，**事故相关，已废弃**。权重硬切 1.0，无渐变/监控。\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-11-01.py.txt"
+      ]
+    },
+    {
+      "id": 12,
+      "original_status_heading": "`g1_arm_lift_left.py` — 已保存，**与事故同批，已废弃**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-12-01.py.txt"
+      ]
+    },
+    {
+      "id": 13,
+      "original_status_heading": "`g1_arm_lift_right.py` — 已保存，**已废弃**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-13-01.py.txt"
+      ]
+    },
+    {
+      "id": 14,
+      "original_status_heading": "`g1_arm_lift_both.py` — 已保存，**已废弃**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-14-01.py.txt"
+      ]
+    },
+    {
+      "id": 15,
+      "original_status_heading": "`g1_arm_left_forward.py` — 已保存，**已废弃**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-15-01.py.txt"
+      ]
+    },
+    {
+      "id": 16,
+      "original_status_heading": "`g1_arm_left_toward_right.py` — 已保存，**已废弃**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-16-01.py.txt"
+      ]
+    },
+    {
+      "id": 17,
+      "original_status_heading": "`g1_arm_safe.py` — 已保存，**语法 OK；未记录真机运行**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-17-01.py.txt"
+      ]
+    },
+    {
+      "id": 18,
+      "original_status_heading": "`g1_left_arm_calib.py` — 已保存，**部分实测**（15 向前正确；16 负值外展不可靠）\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-18-01.py.txt"
+      ]
+    },
+    {
+      "id": 19,
+      "original_status_heading": "E1：单左臂 -25°（“先弯腰再抬臂”版本）— **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-19-01.py.txt"
+      ]
+    },
+    {
+      "id": 20,
+      "original_status_heading": "E2：单左臂 -40°、权重 0.8、带实际角度回读 — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-20-01.py.txt"
+      ]
+    },
+    {
+      "id": 21,
+      "original_status_heading": "E3：双臂 -60°、腰部 kp=50、全量快照 — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-21-01.py.txt"
+      ]
+    },
+    {
+      "id": 22,
+      "original_status_heading": "E4：最终双臂 -80°、腰部 kp=150、实时监控 — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-22-01.py.txt"
+      ]
+    },
+    {
+      "id": 23,
+      "original_status_heading": "E5：逐电机扫描 15–28 — **未保存为文件；实测全部映射正确**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-23-01.py.txt"
+      ]
+    },
+    {
+      "id": 24,
+      "original_status_heading": "E6：`MotionSwitcherClient.CheckMode()` — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-24-01.py.txt"
+      ]
+    },
+    {
+      "id": 25,
+      "original_status_heading": "E7：`SetFsmId(501)` + `SetVelocity` — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-25-01.py.txt"
+      ]
+    },
+    {
+      "id": 26,
+      "original_status_heading": "E8：`G1ArmActionClient` — **未保存为文件；口述成功，无 FSM 日志**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-26-01.py.txt"
+      ]
+    },
+    {
+      "id": 27,
+      "original_status_heading": "E9：只读 `mode_machine` — **未保存为文件；实测**\r",
+      "historical_text_only": true,
+      "execute_allowed": false,
+      "code_files": [
+        "record-27-01.py.txt"
+      ]
+    }
+  ]
+}

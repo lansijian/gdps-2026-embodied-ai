@@ -1,0 +1,102 @@
+import time, math
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_SHOULDER, RIGHT_SHOULDER = 15, 22
+DELTA_DEG = -80.0
+MAX_WEIGHT = 1.0
+FPS = 50
+PRINT_HZ = 10
+
+WAIST_JOINTS = [12, 13, 14]
+WAIST_KP = 150.0
+WAIST_KD = 3.0
+LEFT_OTHER = [16,17,18,19,20,21]
+RIGHT_OTHER = list(range(23, 29))
+
+ChannelFactoryInitialize(0, "eth0")
+state = {"msg": None}
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(lambda m: state.__setitem__("msg", m), 10)
+t0 = time.time()
+while state["msg"] is None and time.time() - t0 < 5.0: time.sleep(0.05)
+if state["msg"] is None: raise RuntimeError("未收到 lowstate")
+msg0 = state["msg"]
+
+ql0 = msg0.motor_state[LEFT_SHOULDER].q; ql_t = ql0 + np.deg2rad(DELTA_DEG)
+qr0 = msg0.motor_state[RIGHT_SHOULDER].q; qr_t = qr0 + np.deg2rad(DELTA_DEG)
+waist_lock_q = {j: msg0.motor_state[j].q for j in WAIST_JOINTS}
+
+pub = ChannelPublisher("rt/arm_sdk", LowCmd_); pub.Init()
+crc = CRC(); cmd = unitree_hg_msg_dds__LowCmd_()
+
+def write(ql, qr, w):
+    m = state["msg"]
+    if m is None: return False
+    cmd.motor_cmd[29].q = float(np.clip(w, 0, MAX_WEIGHT))
+    cmd.motor_cmd[29].kp=0; cmd.motor_cmd[29].kd=0; cmd.motor_cmd[29].tau=0
+    for j in WAIST_JOINTS:
+        cmd.motor_cmd[j].mode = 1
+        cmd.motor_cmd[j].q = waist_lock_q[j]
+        cmd.motor_cmd[j].dq = 0.0; cmd.motor_cmd[j].tau = 0.0
+        cmd.motor_cmd[j].kp = WAIST_KP
+        cmd.motor_cmd[j].kd = WAIST_KD
+    cmd.motor_cmd[LEFT_SHOULDER].mode=1; cmd.motor_cmd[LEFT_SHOULDER].q=float(ql)
+    cmd.motor_cmd[LEFT_SHOULDER].dq=0; cmd.motor_cmd[LEFT_SHOULDER].tau=0
+    cmd.motor_cmd[LEFT_SHOULDER].kp=35; cmd.motor_cmd[LEFT_SHOULDER].kd=1.5
+    cmd.motor_cmd[RIGHT_SHOULDER].mode=1; cmd.motor_cmd[RIGHT_SHOULDER].q=float(qr)
+    cmd.motor_cmd[RIGHT_SHOULDER].dq=0; cmd.motor_cmd[RIGHT_SHOULDER].tau=0
+    cmd.motor_cmd[RIGHT_SHOULDER].kp=35; cmd.motor_cmd[RIGHT_SHOULDER].kd=1.5
+    for j in LEFT_OTHER + RIGHT_OTHER:
+        cmd.motor_cmd[j].mode=1; cmd.motor_cmd[j].q=msg0.motor_state[j].q
+        cmd.motor_cmd[j].dq=0; cmd.motor_cmd[j].tau=0
+        cmd.motor_cmd[j].kp=15; cmd.motor_cmd[j].kd=1
+    cmd.crc=crc.Crc(cmd); pub.Write(cmd); return True
+
+def print_monitor(tag):
+    m = state["msg"]
+    if m is None: return
+    print(f"\n--- [{tag}] ---")
+    print(f"{'idx':>3} {'name':<14} {'q(deg)':>9} {'dq':>9} {'tau':>9}")
+    for j, name in [(12,"WaistYaw"), (13,"WaistRoll"), (14,"WaistPitch"),
+                    (15,"L_ShoulderPitch"), (22,"R_ShoulderPitch")]:
+        ms = m.motor_state[j]
+        print(f"{j:>3} {name:<14} {np.rad2deg(ms.q):>9.2f} {ms.dq:>9.4f} {ms.tau_est:>9.4f}")
+
+def ramp(ql_a, ql_b, qr_a, qr_b, sec, label):
+    n = max(1, int(sec * FPS))
+    print(f"\n[{label}]")
+    last_print = 0.0
+    for i in range(n + 1):
+        r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+        if not write(ql_a + (ql_b - ql_a) * r, qr_a + (qr_b - qr_a) * r, MAX_WEIGHT):
+            return False
+        now = time.time()
+        if now - last_print >= 1.0 / PRINT_HZ:
+            print_monitor(label)
+            last_print = now
+        time.sleep(1 / FPS)
+    return True
+
+print("=" * 60)
+print("最后一轮：-80° 大幅前伸 + 腰部/手部实时监控")
+print("=" * 60)
+print("5 秒后开始。请确保有人扶持、急停在手、周围清空。")
+for i in (5,4,3,2,1): print(f"  {i}..."); time.sleep(1)
+
+try:
+    ramp(ql0, ql0, qr0, qr0, 1.0, "权重上升")
+    ramp(ql0, ql_t, qr0, qr_t, 4.0, "手臂前伸 -80°")
+    time.sleep(0.5)
+    ramp(ql_t, ql0, qr_t, qr0, 4.0, "返回")
+    for _ in range(20): write(ql0, qr0, 0); time.sleep(0.02)
+    print("\n✅ 最后一轮测试完成。")
+except Exception as e:
+    print(f"❌ {e}")
+    for _ in range(20): write(ql0, qr0, 0); time.sleep(0.02)
+
+pub.Close()
+sub.Close()

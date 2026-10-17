@@ -1,0 +1,22 @@
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+ChannelFactoryInitialize(0, "eth0")
+c = LocoClient()
+c.SetTimeout(10.0)
+c.Init() if hasattr(c, "Init") else None
+
+for fsm in [501, 801]:
+    print(f"尝试 SetFsmId({fsm}) ...")
+    ret = c.SetFsmId(fsm)
+    print(f"  返回: {ret}")
+    if ret == 0:
+        time.sleep(1.0)
+        print(f"  现在尝试 SetVelocity(0.05, 0, 0, 0.3) ...")
+        vret = c.SetVelocity(0.05, 0.0, 0.0, 0.3)
+        print(f"  SetVelocity 返回: {vret}")
+        time.sleep(0.5)
+        c.SetVelocity(0.0, 0.0, 0.0, 0.5)
+        print("  已发送停止。")
+        break
