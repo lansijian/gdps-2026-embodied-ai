@@ -13,6 +13,7 @@ def main() -> None:
     from geometry_msgs.msg import PoseStamped, Twist
     from rclpy.node import Node
     from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from nav_msgs.msg import Odometry
     from sensor_msgs.msg import LaserScan
     from std_msgs.msg import String
 
@@ -30,7 +31,10 @@ def main() -> None:
         def __init__(self) -> None:
             super().__init__("gdps_local_navigator")
             self.nav = build_navigator()
+            self.declare_parameter("odom_topic", "/dog_odom")
+            odom_topic = str(self.get_parameter("odom_topic").value)
             self.create_subscription(LaserScan, "/scan", self._on_scan, sensor_qos)
+            self.create_subscription(Odometry, odom_topic, self._on_odom, 10)
             self.create_subscription(PoseStamped, "/goal_pose", self._on_goal, 10)
             self.create_subscription(String, "/gdps/manual_stop", self._on_stop, 10)
             self.create_subscription(String, "/gdps/host_heartbeat", self._on_hb, 10)
@@ -41,6 +45,17 @@ def main() -> None:
             self.create_timer(0.1, self._tick)
             self.get_logger().warn(
                 "local_avoid only; full Nav2 is a separate launch and still dry-run by default"
+            )
+
+        def _on_odom(self, msg: Odometry) -> None:
+            yaw = _yaw_from_quat(msg.pose.pose.orientation)
+            self.nav.on_pose(
+                Pose2D(
+                    x=float(msg.pose.pose.position.x),
+                    y=float(msg.pose.pose.position.y),
+                    yaw=yaw,
+                    frame_id=str(msg.header.frame_id),
+                )
             )
 
         def _on_scan(self, msg: LaserScan) -> None:

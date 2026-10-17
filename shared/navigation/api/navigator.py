@@ -30,6 +30,15 @@ class NavState(str, Enum):
     FAULT = "fault"
 
 
+class MotionIntent(str, Enum):
+    HOLD = "hold"
+    CRUISE_FORWARD = "cruise_forward"
+    LATERAL_LEFT = "lateral_left"
+    LATERAL_RIGHT = "lateral_right"
+    ROTATE_IN_PLACE = "rotate_in_place"
+    BACKWARD = "backward"
+
+
 @dataclass
 class NavStatus:
     state: NavState
@@ -42,6 +51,7 @@ class NavStatus:
     goal: Pose2D | None
     pose_known: bool
     path_unreachable: bool
+    motion_intent: str = MotionIntent.HOLD.value
 
 
 @dataclass
@@ -55,11 +65,13 @@ class SharedNavigator:
     cruise_vx: float = 0.08
     detour_wz: float = 0.12
     goal_xy_tolerance_m: float = 0.25
+    allow_auto_forward: bool = False
     goal: Pose2D | None = None
     pose: Pose2D | None = None
     state: NavState = NavState.IDLE
     path_unreachable: bool = False
     _last_health_halt: str = SafetyHalt.NONE.value
+    _motion_intent: MotionIntent = MotionIntent.HOLD
     events: list[str] = field(default_factory=list)
 
     def start(self) -> NavStatus:
@@ -81,6 +93,7 @@ class SharedNavigator:
 
     def pause(self) -> NavStatus:
         self.state = NavState.PAUSED
+        self._motion_intent = MotionIntent.HOLD
         self.adapter.stop("pause")
         self._note("paused")
         return self.get_status()
@@ -88,6 +101,7 @@ class SharedNavigator:
     def stop(self, reason: str = "api_stop") -> NavStatus:
         self.safety.request_manual_stop()
         self.state = NavState.STOPPED
+        self._motion_intent = MotionIntent.HOLD
         self.adapter.stop(reason)
         self._note(f"stopped:{reason}")
         return self.get_status()
@@ -95,6 +109,7 @@ class SharedNavigator:
     def notify_path_unreachable(self) -> NavStatus:
         self.path_unreachable = True
         self.state = NavState.FAULT
+        self._motion_intent = MotionIntent.HOLD
         self.adapter.stop("path_unreachable")
         self._note("path unreachable")
         return self.get_status()
@@ -111,28 +126,70 @@ class SharedNavigator:
     def on_heartbeat(self) -> None:
         self.safety.mark_heartbeat()
 
+    def preview_motion(
+        self,
+        intent: MotionIntent,
+        speed_scale: float = 1.0,
+    ) -> VelocityCommand:
+        """Dry-run only: explicit motion primitives (incl. lateral). Never enables LIVE."""
+        if self.adapter.mode is not MotionMode.DRY_RUN:
+            return self._halt_cmd("preview_requires_dry_run")
+        health = self.safety.evaluate()
+        if not health.ok:
+            return self._halt_cmd(f"halt:{health.halt.value}")
+        decision = self.obstacles.last_decision
+        if decision in {AvoidDecision.NO_SENSOR, AvoidDecision.STOP}:
+            return self._halt_cmd(f"halt:{decision.value}")
+        scale = max(0.0, min(1.0, speed_scale))
+        vx, vy, wz = 0.0, 0.0, 0.0
+        if intent is MotionIntent.CRUISE_FORWARD:
+            vx = self.cruise_vx * scale
+        elif intent is MotionIntent.BACKWARD:
+            vx = -self.cruise_vx * scale
+        elif intent is MotionIntent.LATERAL_LEFT:
+            vy = self.adapter.limits.max_vy * scale
+        elif intent is MotionIntent.LATERAL_RIGHT:
+            vy = -self.adapter.limits.max_vy * scale
+        elif intent is MotionIntent.ROTATE_IN_PLACE:
+            wz = self.detour_wz * scale
+        self._motion_intent = intent
+        cmd = VelocityCommand(vx=vx, vy=vy, wz=wz, source=f"dryrun_preview:{intent.value}")
+        self.adapter.send_velocity(cmd)
+        return cmd
+
     def step(self) -> VelocityCommand:
         health = self.safety.evaluate()
         self._last_health_halt = health.halt.value
         if self.state in {NavState.IDLE, NavState.STOPPED, NavState.PAUSED}:
             cmd = VelocityCommand(source=f"hold:{self.state.value}")
+            self._motion_intent = MotionIntent.HOLD
             self.adapter.send_velocity(cmd)
             return cmd
         if not health.ok:
             self.state = NavState.FAULT
+            self._motion_intent = MotionIntent.HOLD
             self.adapter.stop(health.halt.value)
             return VelocityCommand(source=f"halt:{health.halt.value}")
         if self.path_unreachable:
+            self._motion_intent = MotionIntent.HOLD
             self.adapter.stop("path_unreachable")
             return VelocityCommand(source="halt:path_unreachable")
 
         decision = self.obstacles.last_decision
         if decision is AvoidDecision.NO_SENSOR:
             self.state = NavState.FAULT
+            self._motion_intent = MotionIntent.HOLD
             self.adapter.stop("no_sensor")
             return VelocityCommand(source="halt:no_sensor")
         if decision is AvoidDecision.STOP:
+            self._motion_intent = MotionIntent.HOLD
             cmd = VelocityCommand(source="obstacle_stop")
+            self.adapter.send_velocity(cmd)
+            return cmd
+
+        if not self.allow_auto_forward or self.goal is None or self.pose is None:
+            self._motion_intent = MotionIntent.HOLD
+            cmd = VelocityCommand(source="hold:no_goal_or_pose")
             self.adapter.send_velocity(cmd)
             return cmd
 
@@ -142,9 +199,15 @@ class SharedNavigator:
         elif decision is AvoidDecision.DETOUR_LEFT:
             vx = min(vx, 0.5 * self.cruise_vx)
             wz = abs(self.detour_wz)
+            self._motion_intent = MotionIntent.ROTATE_IN_PLACE
         elif decision is AvoidDecision.DETOUR_RIGHT:
             vx = min(vx, 0.5 * self.cruise_vx)
             wz = -abs(self.detour_wz)
+            self._motion_intent = MotionIntent.ROTATE_IN_PLACE
+        elif vx > 0:
+            self._motion_intent = MotionIntent.CRUISE_FORWARD
+        else:
+            self._motion_intent = MotionIntent.HOLD
 
         cmd = VelocityCommand(vx=vx, vy=0.0, wz=wz, source=f"local:{decision.value}")
         self.adapter.send_velocity(cmd)
@@ -164,16 +227,18 @@ class SharedNavigator:
             goal=self.goal,
             pose_known=self.pose is not None,
             path_unreachable=self.path_unreachable,
+            motion_intent=self._motion_intent.value,
         )
 
     def _desired_from_goal(self) -> tuple[float, float]:
         if self.goal is None or self.pose is None:
-            return self.cruise_vx, 0.0
+            return 0.0, 0.0
         dx = self.goal.x - self.pose.x
         dy = self.goal.y - self.pose.y
         dist = math.hypot(dx, dy)
         if dist <= self.goal_xy_tolerance_m:
             self.state = NavState.IDLE
+            self._motion_intent = MotionIntent.HOLD
             self._note("goal reached (local pose, not Nav2)")
             return 0.0, 0.0
         heading = math.atan2(dy, dx)
@@ -181,6 +246,12 @@ class SharedNavigator:
         wz = max(-self.detour_wz, min(self.detour_wz, yaw_err))
         vx = self.cruise_vx if abs(yaw_err) < 0.6 else 0.0
         return vx, wz
+
+    def _halt_cmd(self, source: str) -> VelocityCommand:
+        self._motion_intent = MotionIntent.HOLD
+        cmd = VelocityCommand(source=source)
+        self.adapter.send_velocity(cmd)
+        return cmd
 
     def _note(self, message: str) -> None:
         self.events.append(f"{time.time():.3f} {message}")

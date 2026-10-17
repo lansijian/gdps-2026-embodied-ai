@@ -75,6 +75,8 @@ class G1MotionAdapter:
         if confirm_phrase != "ENABLE LIVE MOTION":
             raise PermissionError("confirm phrase mismatch")
         self.mode = MotionMode.LIVE
+        live_vy = getattr(self, "_live_max_vy", 0.0)
+        self.limits.max_vy = float(live_vy)
 
     def clamp(self, command: VelocityCommand) -> VelocityCommand:
         vx = max(-self.limits.max_vx, min(self.limits.max_vx, command.vx))

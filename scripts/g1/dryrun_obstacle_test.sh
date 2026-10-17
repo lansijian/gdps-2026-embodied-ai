@@ -52,35 +52,27 @@ echo "############################################################"
 
 echo ""
 echo "--- A1. /scan frame_id, ranges count, angle range ---"
-timeout 5 ros2 topic echo /scan --once 2>/dev/null | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    r = d['ranges']
-    valid = [x for x in r if x is not None and 0 < x < 1e6]
-    print(f'frame_id     = {d[\"header\"][\"frame_id\"]}')
-    print(f'stamp        = {d[\"header\"][\"stamp\"]}')
-    print(f'angle_min    = {d[\"angle_min\"]:.4f}')
-    print(f'angle_max    = {d[\"angle_max\"]:.4f}')
-    print(f'angle_incr   = {d[\"angle_increment\"]:.6f}')
-    print(f'range_min    = {d[\"range_min\"]:.3f}')
-    print(f'range_max    = {d[\"range_max\"]:.3f}')
-    print(f'ranges_count = {len(r)}')
-    print(f'valid_count  = {len(valid)}')
+REPO_ROOT="${GDPS_REPO:-/home/unitree/gdps-2026-embodied-ai}"
+python3 "$REPO_ROOT/scripts/g1/ros2_one_shot.py" /scan sensor_msgs/msg/LaserScan --timeout 5 2>/dev/null | python3 -c "
+import sys, math
+text=sys.stdin.read()
+if 'TIMEOUT' in text or not text.strip():
+    print('  (no /scan data received)')
+    raise SystemExit(0)
+# repr of LaserScan message from rclpy
+import re
+m=re.search(r'frame_id=([^,\\)]+)', text)
+print('frame_id     =', m.group(1) if m else 'unknown')
+mr=re.search(r'ranges=\\[([^\\]]*)\\]', text)
+if mr:
+    vals=[float(x) for x in mr.group(1).split(',') if x.strip() and x.strip()!='nan']
+    valid=[x for x in vals if 0<x<1e6]
+    print('ranges_count =', len(vals))
+    print('valid_count  =', len(valid))
     if valid:
-        print(f'global_min   = {min(valid):.3f} m')
-        print(f'global_max   = {max(valid):.3f} m')
-        # front cone: middle 60 deg
-        n = len(r); mid = n//2; half = n//6
-        front = [x for x in r[mid-half:mid+half] if x is not None and 0 < x < 1e6]
-        if front:
-            print(f'front_min    = {min(front):.3f} m  (front 60 deg)')
-        else:
-            print('front_min    = N/A (no returns in front cone)')
-except Exception as e:
-    print(f'PARSE FAILED: {e}')
-    print('raw head:')
-" || echo "  (no /scan data received)"
+        print('global_min   = %.3f m' % min(valid))
+        print('global_max   = %.3f m' % max(valid))
+" || echo "  (scan probe failed)"
 
 echo ""
 echo "--- A2. /scan frequency (5s window) ---"
@@ -102,19 +94,12 @@ except Exception as e:
 
 echo ""
 echo "--- A4. ObstacleMonitor decision (/gdps/nav_status) ---"
-timeout 5 ros2 topic echo /gdps/nav_status --once 2>/dev/null || echo "  (no nav_status received)"
+python3 "$REPO_ROOT/scripts/g1/ros2_one_shot.py" /gdps/nav_status std_msgs/msg/String --timeout 5 2>/dev/null || echo "  (no nav_status received)"
 
 echo ""
 echo "--- A5. Front obstacle distance trend (5 samples, 0.5s apart) ---"
 for i in 1 2 3 4 5; do
-  timeout 3 ros2 topic echo /scan --once 2>/dev/null | python3 -c "
-import sys, json
-try:
-    d=json.load(sys.stdin); r=d['ranges']; n=len(r); mid=n//2; half=n//6
-    f=[x for x in r[mid-half:mid+half] if x is not None and 0<x<1e6]
-    print(f'  sample $i: front_min={min(f):.3f} m' if f else '  sample $i: front_min=N/A')
-except: pass
-" 2>/dev/null
+  python3 "$REPO_ROOT/scripts/g1/ros2_one_shot.py" /scan sensor_msgs/msg/LaserScan --timeout 3 2>/dev/null | head -1 | sed "s/^/  sample $i: /" || echo "  sample $i: timeout"
   sleep 0.5
 done
 

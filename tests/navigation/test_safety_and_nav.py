@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
-from shared.navigation.api.navigator import NavState, SharedNavigator
+from shared.navigation.api.navigator import MotionIntent, NavState, SharedNavigator
 from shared.navigation.api.types import Pose2D
 from shared.navigation.factory import build_navigator, load_nav_config
 from shared.navigation.perception.obstacle_monitor import (
@@ -172,9 +172,17 @@ class SafetyTests(unittest.TestCase):
 class NavigatorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.nav = build_navigator()
+        self.nav.safety.require_odom = False
+        self.nav.safety.require_tf = False
+        self.nav.safety.require_heartbeat = False
 
     def tearDown(self) -> None:
         self.nav.adapter.close()
+
+    def _healthy_running(self) -> None:
+        self.nav.on_scan(_scan(8.0))
+        self.nav.on_pose(Pose2D(0.0, 0.0, 0.0, "odom"))
+        self.nav.start()
 
     def test_config_loads_json(self) -> None:
         cfg = load_nav_config()
@@ -182,24 +190,30 @@ class NavigatorTests(unittest.TestCase):
         self.assertLessEqual(cfg["max_vx"], 0.10)
 
     def test_obstacle_stop_zero_cmd(self) -> None:
-        self.nav.start()
+        self._healthy_running()
         self.nav.on_scan(_scan(0.5))
         cmd = self.nav.step()
         self.assertTrue(cmd.is_zero())
         self.assertEqual(cmd.source, "obstacle_stop")
 
-    def test_clear_forward_cruise(self) -> None:
-        self.nav.start()
-        self.nav.on_scan(_scan(8.0))
+    def test_no_auto_forward_without_goal(self) -> None:
+        self._healthy_running()
+        cmd = self.nav.step()
+        self.assertTrue(cmd.is_zero())
+        self.assertIn("no_goal", cmd.source)
+
+    def test_clear_forward_cruise_with_goal(self) -> None:
+        self.nav.allow_auto_forward = True
+        self._healthy_running()
+        self.nav.set_goal(Pose2D(2.0, 0.0, 0.0, "odom"))
         cmd = self.nav.step()
         self.assertGreater(cmd.vx, 0.0)
         self.assertLessEqual(cmd.vx, 0.10)
+        self.assertAlmostEqual(cmd.vy, 0.0)
 
     def test_goal_and_pause(self) -> None:
         self.nav.set_goal(Pose2D(1.0, 0.0, 0.0, "map"))
-        self.nav.on_pose(Pose2D(0.0, 0.0, 0.0, "map"))
-        self.nav.on_scan(_scan(8.0))
-        self.nav.start()
+        self._healthy_running()
         self.nav.step()
         st = self.nav.pause()
         self.assertEqual(st.state, NavState.PAUSED)
@@ -207,17 +221,36 @@ class NavigatorTests(unittest.TestCase):
         self.assertTrue(cmd.is_zero())
 
     def test_unreachable_stops(self) -> None:
-        self.nav.start()
-        self.nav.on_scan(_scan(8.0))
+        self._healthy_running()
         self.nav.notify_path_unreachable()
         cmd = self.nav.step()
         self.assertTrue(cmd.is_zero())
 
     def test_no_sensor_fault(self) -> None:
+        self.nav.on_pose(Pose2D(0, 0, 0, "odom"))
         self.nav.start()
         cmd = self.nav.step()
         self.assertTrue(cmd.is_zero())
         self.assertEqual(self.nav.state, NavState.FAULT)
+
+
+class LateralDryRunTests(unittest.TestCase):
+    def test_lateral_preview_not_rotation(self) -> None:
+        nav = build_navigator()
+        nav.safety.require_sensor = False
+        nav.safety.require_heartbeat = False
+        nav.safety.require_odom = False
+        nav.safety.require_tf = False
+        nav.on_scan(_scan(8.0))
+        nav.on_pose(Pose2D(0, 0, 0, "odom"))
+        nav.start()
+        left = nav.preview_motion(MotionIntent.LATERAL_LEFT, speed_scale=1.0)
+        rot = nav.preview_motion(MotionIntent.ROTATE_IN_PLACE, speed_scale=1.0)
+        self.assertGreater(abs(left.vy), 0.0)
+        self.assertAlmostEqual(left.wz, 0.0)
+        self.assertGreater(abs(rot.wz), 0.0)
+        self.assertAlmostEqual(rot.vy, 0.0)
+        nav.adapter.close()
 
 
 class MotionLockTests(unittest.TestCase):

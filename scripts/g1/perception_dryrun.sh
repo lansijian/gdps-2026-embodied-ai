@@ -32,8 +32,6 @@ cleanup() {
         wait "$PCL_PID" 2>/dev/null
         echo "  stopped pointcloud_to_laserscan (pid $PCL_PID)"
     fi
-    # Belt-and-suspenders: kill any stray pointcloud_to_laserscan we started.
-    pkill -f "ros2 run gdps_g1_navigation pointcloud_to_laserscan" 2>/dev/null || true
     echo "[$(date +%T)] cleanup done."
 }
 trap cleanup EXIT INT TERM
@@ -187,8 +185,7 @@ class P(Node):
         if self.fmin is not None: print('FRONT_MIN       = %.3f m' % self.fmin)
         else: print('FRONT_MIN       = N/A')
         if self.lmin is not None: print('left_min        = %.3f m' % self.lmin)
-        if self.right_min is not None: print('right_min       = %.3f m' % self.rmin2)
-        elif self.rmin2 is not None: print('right_min       = %.3f m' % self.rmin2)
+        if self.rmin2 is not None: print('right_min       = %.3f m' % self.rmin2)
 rclpy.init(); n=P($DURATION); rclpy.spin(n); n.destroy_node(); rclpy.shutdown()
 "
 echo

@@ -37,6 +37,7 @@ def generate_launch_description() -> LaunchDescription:
                 executable="local_navigator",
                 name="gdps_local_navigator",
                 output="screen",
+                parameters=[{"odom_topic": "/dog_odom", "cmd_vel_topic": "/gdps/cmd_vel_local"}],
             ),
         ]
     )

@@ -34,6 +34,8 @@ class ObstacleMonitor:
     stop_distance_m: float = 0.60
     slow_distance_m: float = 1.20
     forward_half_angle_rad: float = 0.60
+    forward_angle_offset_rad: float = 0.0
+    frame_extrinsic_verified: bool = False
     blind_zone_m: float = 0.40  # returns closer than this are uncertain (self/near-blind)
     min_forward_points: int = 3  # need at least this many front returns to decide
     invalid_range: float = 0.0
@@ -53,7 +55,10 @@ class ObstacleMonitor:
             if raw <= scan.range_min or raw >= scan.range_max:
                 continue
             angle = scan.angle_min + i * scan.angle_increment
-            wrapped = math.atan2(math.sin(angle), math.cos(angle))
+            wrapped = math.atan2(
+                math.sin(angle - self.forward_angle_offset_rad),
+                math.cos(angle - self.forward_angle_offset_rad),
+            )
             if abs(wrapped) <= self.forward_half_angle_rad:
                 valid.append(raw)
             if 0.15 < wrapped <= 1.2:
