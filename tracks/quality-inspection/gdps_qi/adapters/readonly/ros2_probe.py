@@ -1,58 +1,43 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Dict, List, Optional, Type
+
+from gdps_qi.adapters.readonly.ros2_session import ros2_spin_once_subscribe
 
 
 def probe_ros2_topic_once(
     topic: str,
     msg_type: Type[Any],
     timeout_s: float = 3.0,
+    store_payload: bool = False,
 ) -> Dict[str, object]:
-    """Subscribe once on Foxy. Safe to call off-robot (returns import errors)."""
     if not topic:
         return {"ok": False, "error": "empty_topic"}
-    try:
-        import rclpy
-        from rclpy.node import Node
-        from rclpy.qos import qos_profile_sensor_data
-    except ImportError as exc:
-        return {"ok": False, "error": f"rclpy_unavailable:{exc}"}
-
-    result: Dict[str, object] = {"ok": False, "topic": topic, "msg_type": str(msg_type)}
     received: Dict[str, object] = {}
 
-    class _OnceSub(Node):
-        def __init__(self) -> None:
-            super().__init__("gdps_qi_readonly_probe")
-            self._sub = self.create_subscription(
-                msg_type, topic, self._cb, qos_profile_sensor_data
-            )
+    def _cb(msg: Any) -> None:
+        if received:
+            return
+        received["host_received_at"] = time.time()
+        received["msg_summary"] = summarize_ros_message(msg)
+        if store_payload:
+            received["msg"] = msg
 
-        def _cb(self, msg: Any) -> None:
-            if received:
-                return
-            received["stamp"] = time.time()
-            received["msg_summary"] = _summarize_msg(msg)
-
-    rclpy.init(args=None)
-    node = _OnceSub()
-    t0 = time.time()
-    try:
-        while not received and (time.time() - t0) < timeout_s:
-            rclpy.spin_once(node, timeout_sec=0.1)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if not received:
-        result["error"] = "timeout"
+    ok, err = ros2_spin_once_subscribe(topic, msg_type, _cb, timeout_s)
+    result: Dict[str, object] = {
+        "ok": ok,
+        "topic": topic,
+        "msg_type": getattr(msg_type, "__name__", str(msg_type)),
+    }
+    if not ok:
+        result["error"] = err or "timeout"
         return result
-    result["ok"] = True
     result.update(received)
     return result
 
 
-def _summarize_msg(msg: Any) -> Dict[str, object]:
+def summarize_ros_message(msg: Any) -> Dict[str, object]:
     out: Dict[str, object] = {"type": type(msg).__name__}
     if hasattr(msg, "header"):
         h = msg.header
@@ -64,15 +49,49 @@ def _summarize_msg(msg: Any) -> Dict[str, object]:
         out["height"] = int(msg.height)
         out["width"] = int(msg.width)
         out["encoding"] = getattr(msg, "encoding", "")
+        out["is_bigendian"] = int(getattr(msg, "is_bigendian", 0))
+        out["step"] = int(getattr(msg, "step", 0))
+        data = getattr(msg, "data", None)
+        out["data_length"] = len(data) if data is not None else 0
     if hasattr(msg, "name") and hasattr(msg, "position"):
-        names = list(msg.name)
+        names = [str(n) for n in msg.name]
+        pos = [float(p) for p in msg.position]
         out["joint_count"] = len(names)
-        out["joint_names_sample"] = names[:12]
+        out["joint_names"] = names
+        out["joint_positions"] = pos
+        if hasattr(msg, "velocity"):
+            out["joint_velocities"] = [float(v) for v in msg.velocity]
     if hasattr(msg, "k"):
-        k = list(msg.k)
-        out["camera_k"] = k[:4]
         out["distortion_model"] = getattr(msg, "distortion_model", "")
+        out["k"] = [float(x) for x in msg.k]
+        out["d"] = [float(x) for x in getattr(msg, "d", [])]
+        out["r"] = [float(x) for x in getattr(msg, "r", [])]
+        out["p"] = [float(x) for x in getattr(msg, "p", [])]
+        out["width"] = int(getattr(msg, "width", 0))
+        out["height"] = int(getattr(msg, "height", 0))
     if hasattr(msg, "pose"):
         p = msg.pose.pose.position
-        out["position"] = [p.x, p.y, p.z]
+        out["position"] = [float(p.x), float(p.y), float(p.z)]
     return out
+
+
+def joint_state_from_summary(summary: Dict[str, object], mapping_basis: str) -> "JointSnapshot":
+    from gdps_qi.adapters.readonly.joint_snapshot import JointSnapshot, JointValidity
+
+    names = summary.get("joint_names")
+    pos = summary.get("joint_positions")
+    if not isinstance(names, list) or not isinstance(pos, list):
+        return JointSnapshot({}, None, "ros_joint_state", JointValidity.UNKNOWN, mapping_basis)
+    if len(names) != len(pos):
+        return JointSnapshot({}, summary.get("stamp_sec"), "ros_joint_state", JointValidity.UNKNOWN, mapping_basis)
+    positions = {str(n): float(p) for n, p in zip(names, pos)}
+    stamp = summary.get("stamp_sec")
+    stamp_f = float(stamp) if stamp is not None else None
+    return JointSnapshot(
+        positions=positions,
+        stamp_sec=stamp_f,
+        source="ros_joint_state",
+        validity=JointValidity.VALID if positions else JointValidity.UNKNOWN,
+        mapping_basis=mapping_basis,
+        raw_joint_count=len(positions),
+    )

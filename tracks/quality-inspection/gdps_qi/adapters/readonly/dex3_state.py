@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from gdps_qi.adapters.dex3_hand import HandState
+from gdps_qi.adapters.readonly.dds_readonly import parse_hand_state, subscribe_dds_once
 from gdps_qi.hardware.g1_joint_map import DEX3_JOINT_NAMES_LEFT, DEX3_JOINT_NAMES_RIGHT
 from gdps_qi.types import VerificationStatus
 
@@ -12,7 +13,7 @@ from gdps_qi.types import VerificationStatus
 class Dex3StateReadOnly:
     hand_state_topic_left: str = "rt/lf/dex3/state"
     hand_state_topic_right: str = "rt/rf/dex3/state"
-    status: VerificationStatus = VerificationStatus.DOCUMENTED_UNVERIFIED
+    status: VerificationStatus = VerificationStatus.UNKNOWN
     _cache: Dict[str, HandState] = field(default_factory=dict)
     _last_probe: Dict[str, object] = field(default_factory=dict)
 
@@ -23,24 +24,50 @@ class Dex3StateReadOnly:
             "right_topic": self.hand_state_topic_right,
             "joint_names_left": DEX3_JOINT_NAMES_LEFT,
             "joint_names_right": DEX3_JOINT_NAMES_RIGHT,
-            "tactile_fields": "UNKNOWN",
-            "missing": [],
+            "left_validity": "UNKNOWN",
+            "right_validity": "UNKNOWN",
         }
+        self._cache.clear()
         if not live:
             report["mode"] = "dry_run_schema"
             self._last_probe = report
             return report
         report["mode"] = "live_readonly"
         try:
-            from unitree_sdk2py.core.channel import ChannelSubscriber  # type: ignore
+            from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandState_  # type: ignore
         except ImportError as exc:
-            report["dds"] = {"ok": False, "error": f"unitree_sdk2py_unavailable:{exc}"}
+            report["dds"] = {"ok": False, "error": f"hand_state_idl_unavailable:{exc}"}
+            self._last_probe = report
             return report
-        report["dds"] = {
-            "ok": False,
-            "error": "hand_state_subscriber_requires_on_robot_manual_run",
-            "sdk_import": True,
-        }
+        left = subscribe_dds_once(
+            self.hand_state_topic_left,
+            HandState_,
+            timeout_s,
+            lambda m: parse_hand_state(m, "left"),
+        )
+        right = subscribe_dds_once(
+            self.hand_state_topic_right,
+            HandState_,
+            timeout_s,
+            lambda m: parse_hand_state(m, "right"),
+        )
+        report["left"] = left
+        report["right"] = right
+        import time
+
+        now = time.time()
+        if left.get("ok"):
+            report["left_validity"] = left.get("validity", "UNKNOWN")
+            joints = left.get("joint_positions", [])
+            if isinstance(joints, list) and len(joints) == 7:
+                self._cache["left"] = HandState("left", tuple(float(x) for x in joints), now, "dds")
+        if right.get("ok"):
+            report["right_validity"] = right.get("validity", "UNKNOWN")
+            joints = right.get("joint_positions", [])
+            if isinstance(joints, list) and len(joints) == 7:
+                self._cache["right"] = HandState("right", tuple(float(x) for x in joints), now, "dds")
+        if self._cache:
+            self.status = VerificationStatus.DOCUMENTED_UNVERIFIED
         self._last_probe = report
         return report
 

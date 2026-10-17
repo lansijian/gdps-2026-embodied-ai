@@ -50,7 +50,9 @@ class Phase3DiagnosticsTests(unittest.TestCase):
             ),
             mc._safety_context(),
         )
-        self.assertIn(res.status, ("PLAN_OK", "SAFE_HOLD", "REFINE"))
+        self.assertEqual(res.status, "PLAN_READONLY_OK")
+        self.assertEqual(res.verification.get("tier"), "RELATIVE_TABLE")
+        self.assertFalse(res.verification.get("executable_plan"))
 
 
 class UrdfPinocchioTests(unittest.TestCase):

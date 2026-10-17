@@ -117,7 +117,10 @@ class MissionController:
 
     def _register_skills(self) -> None:
         register_p1_skills(self.executor)
-        register_p1_localize_skills(self.executor, self.g1_tf)
+        from gdps_qi.transforms.calibration_trust import CalibrationTrust
+
+        trust = CalibrationTrust()
+        register_p1_localize_skills(self.executor, self.g1_tf, trust)
         register_p2_skills(self.executor, self.p2_state)
         register_p3_skills(self.executor, self.p3_state)
         register_p456_skills(self.executor, self.tail_state)

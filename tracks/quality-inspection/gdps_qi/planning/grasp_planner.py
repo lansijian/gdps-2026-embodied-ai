@@ -25,6 +25,7 @@ class GraspPlan:
     joint_seed: Tuple[float, ...]
     reachable: bool
     hardware_joint_targets_allowed: bool
+    executable_plan: bool
     message: str = ""
 
 
@@ -52,9 +53,14 @@ class GraspPlanner:
         tablet_pose_base: PoseRecord,
         template_name: str = "tablet_edge_pinch",
         t_wrist_tcp: Optional[np.ndarray] = None,
+        allow_executable: bool = False,
     ) -> GraspPlan:
         template = self.registry.grasp_templates[template_name]
-        if tablet_pose_base.uncertainty and tablet_pose_base.uncertainty.position_m > self.max_uncertainty_m:
+        uncertainty_high = (
+            tablet_pose_base.uncertainty is not None
+            and tablet_pose_base.uncertainty.position_m > self.max_uncertainty_m
+        )
+        if uncertainty_high and allow_executable:
             return GraspPlan(
                 hand="left",
                 pregrasp=tablet_pose_base,
@@ -63,6 +69,7 @@ class GraspPlanner:
                 joint_seed=tuple(0.0 for _ in range(7)),
                 reachable=False,
                 hardware_joint_targets_allowed=False,
+                executable_plan=False,
                 message="uncertainty_too_high",
             )
         if template.min_edge_gap_m < 0.0008:
@@ -74,6 +81,7 @@ class GraspPlanner:
                 joint_seed=tuple(0.0 for _ in range(7)),
                 reachable=False,
                 hardware_joint_targets_allowed=False,
+                executable_plan=False,
                 message="insufficient_edge_gap",
             )
         t_base_object = transform_from_pose(tablet_pose_base.position, tablet_pose_base.orientation_xyzw)
@@ -88,12 +96,12 @@ class GraspPlanner:
         lift = t_base_grasp.copy()
         lift[:3, 3] += np.array([0.0, 0.0, 0.05])
         hand = template.hand if template.hand != "auto" else self.choose_hand(tablet_pose_base.position)
-        wrist_tcp = t_wrist_tcp if t_wrist_tcp is not None else np.eye(4)
+        wrist_tcp = t_wrist_tcp if (t_wrist_tcp is not None and allow_executable) else np.eye(4)
         t_base_wrist_grasp = compose_transform(t_base_grasp, invert_transform(wrist_tcp))
         t_base_wrist_pre = compose_transform(t_base_pre, invert_transform(wrist_tcp))
         t_base_wrist_lift = compose_transform(lift, invert_transform(wrist_tcp))
         seed = tuple(0.0 for _ in range(7))
-        hw_ok = self._hardware_allowed()
+        hw_ok = allow_executable and self._hardware_allowed()
         side = hand
         ok_pre, ik_pre = self._segment_ok(t_base_wrist_pre, seed, "pregrasp", side)
         ok_gr, ik_gr = self._segment_ok(
@@ -110,6 +118,8 @@ class GraspPlanner:
         if reachable and not hw_ok:
             joint_seed = tuple(0.0 for _ in range(7))
         msg = "ok" if reachable else f"segment_failed:{ik_gr.message}"
+        if uncertainty_high and reachable:
+            msg = "uncertainty_high_readonly"
         return GraspPlan(
             hand=hand,
             pregrasp=pre_pose,
@@ -118,6 +128,7 @@ class GraspPlanner:
             joint_seed=joint_seed,
             reachable=reachable,
             hardware_joint_targets_allowed=hw_ok and reachable,
+            executable_plan=hw_ok and reachable and allow_executable,
             message=msg,
         )
 

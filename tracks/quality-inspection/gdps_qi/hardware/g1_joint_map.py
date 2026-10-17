@@ -83,15 +83,16 @@ class TcpOffset:
     verified: bool = False
 
 
+# Placeholder offsets for math demos only — NOT field measurements.
 DEFAULT_LEFT_PINCH_TCP = TcpOffset(
-    "left_pinch_tcp",
-    (0.08, 0.0, 0.0),
+    "left_pinch_tcp_demo",
+    (0.0, 0.0, 0.0),
     (0.0, 0.0, 0.0, 1.0),
     verified=False,
 )
 DEFAULT_RIGHT_PINCH_TCP = TcpOffset(
-    "right_pinch_tcp",
-    (0.08, 0.0, 0.0),
+    "right_pinch_tcp_demo",
+    (0.0, 0.0, 0.0),
     (0.0, 0.0, 0.0, 1.0),
     verified=False,
 )

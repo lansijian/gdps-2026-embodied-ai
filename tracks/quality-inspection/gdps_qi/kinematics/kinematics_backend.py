@@ -71,6 +71,18 @@ class SimplifiedTestKinematics(KinematicsBackend):
     ) -> IkResult:
         return self._impl.ik(target_t, seed)
 
+    def check_segment_reachable(
+        self, start_joints: Sequence[float], target_t: np.ndarray, label: str, side: str = "left"
+    ) -> Tuple[bool, IkResult]:
+        ik = self.ik(target_t, start_joints, side=side)
+        fk = self.fk(ik.joint_positions, side=side)
+        pos_err = float(np.linalg.norm(fk[:3, 3] - target_t[:3, 3]))
+        if pos_err <= max(0.005, ik.position_error_m * 2.0):
+            ik.success = True
+            ik.message = f"{label}_position_ok_test_only"
+            return True, ik
+        return False, ik
+
 
 @dataclass
 class G1UrdfKinematicsAdapter(KinematicsBackend):

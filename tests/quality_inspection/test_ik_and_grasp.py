@@ -40,7 +40,7 @@ class GraspPlannerTests(unittest.TestCase):
             uncertainty=Uncertainty(0.01, 0.1),
             confidence=0.9,
         )
-        plan = planner.plan_tablet_grasp(pose)
+        plan = planner.plan_tablet_grasp(pose, allow_executable=True)
         self.assertFalse(plan.reachable)
         self.assertIn("uncertainty", plan.message)
 
