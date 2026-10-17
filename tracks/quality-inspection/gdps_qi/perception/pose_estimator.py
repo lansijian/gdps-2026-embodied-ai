@@ -17,18 +17,13 @@ from gdps_qi.math_se3 import (
     transform_point,
     undistort_normalized,
 )
+from gdps_qi.perception.tablet_vision import detect_tablets_in_rgb
 from gdps_qi.registry.object_registry import ObjectRegistry, SlotTemplate
 from gdps_qi.transforms.transform_manager import TransformManager
-from gdps_qi.types import PoseRecord, Uncertainty
+from gdps_qi.types import DataProvenance, PoseRecord, Uncertainty
 
 
-@dataclass
-class Detection:
-    object_id: str
-    label: str
-    confidence: float
-    bbox_xywh: Tuple[int, int, int, int]
-    center_uv: Tuple[float, float]
+from gdps_qi.perception.detection_types import Detection
 
 
 @dataclass
@@ -36,6 +31,11 @@ class PoseEstimator:
     tf: TransformManager
     registry: ObjectRegistry
     max_grasp_position_error_m: float = 0.004
+
+    def detect_tablets_from_rgb(self, frame: CameraFrame) -> Tuple[List[Detection], str]:
+        if frame.rgb is None:
+            return [], "no_rgb"
+        return detect_tablets_in_rgb(frame.rgb)
 
     def detect_tablet_ids_from_mock(self, frame: CameraFrame) -> List[Detection]:
         """Offline OCR substitute: read two-digit labels from solid-color blobs."""
@@ -91,6 +91,97 @@ class PoseEstimator:
             source="pnp",
         )
 
+    def validate_detections_for_target(
+        self, detections: List[Detection], sample_id: str
+    ) -> Tuple[bool, str]:
+        labels = [d.label for d in detections]
+        if sample_id not in labels:
+            return False, "target_sample_not_detected"
+        if not re.fullmatch(r"\d{2}", sample_id):
+            return False, "invalid_sample_id"
+        dup = [lb for lb in labels if lb == sample_id]
+        if len(dup) != 1:
+            return False, "duplicate_target_label"
+        det = next(d for d in detections if d.label == sample_id)
+        if det.confidence < 0.5:
+            return False, "low_confidence_detection"
+        return True, "ok"
+
+    def tablet_pose_from_detection(
+        self,
+        sample_id: str,
+        frame: CameraFrame,
+        detection: Detection,
+        base_frame: str = "robot_center",
+    ) -> Tuple[PoseRecord, str]:
+        depth_m = None
+        if frame.depth_m is not None:
+            u, v = int(detection.center_uv[0]), int(detection.center_uv[1])
+            h, w = frame.depth_m.shape
+            if 0 <= u < w and 0 <= v < h:
+                depth_m = float(frame.depth_m[v, u])
+                if depth_m <= 0.05 or depth_m != depth_m:
+                    depth_m = None
+        ok, p_table, mode = self.pixel_to_table_point(
+            detection.center_uv[0], detection.center_uv[1], frame, depth_m
+        )
+        if not ok:
+            ident = self.registry.get_sample(sample_id)
+            if not self.tf.can_transform(base_frame, "table_frame"):
+                return (
+                    PoseRecord(
+                        frame_id=base_frame,
+                        stamp=frame.stamp,
+                        position=(0.0, 0.0, 0.0),
+                        orientation_xyzw=(0.0, 0.0, 0.0, 1.0),
+                        object_id=f"tablet_{sample_id}",
+                        provenance=DataProvenance.VISION_INFERENCE,
+                        confidence=detection.confidence,
+                    ),
+                    "missing_table_tf",
+                )
+            slot = self.registry.tablet_slots[ident.tray_slot]
+            pose = self.tablet_pose_in_base(sample_id, base_frame)
+            pose.provenance = DataProvenance.SIMULATION
+            pose.confidence = min(pose.confidence, detection.confidence)
+            return pose, "slot_fallback_requires_simulation_mode"
+        ident = self.registry.get_sample(sample_id)
+        slot = self.registry.tablet_slots[ident.tray_slot]
+        z = float(p_table[2]) if mode == "depth" else float(slot.position_table[2])
+        unc = Uncertainty(0.004 if mode == "depth" else 0.008, 0.02, source=mode)
+        if not self.tf.can_transform(base_frame, "table_frame"):
+            return (
+                PoseRecord(
+                    frame_id=base_frame,
+                    stamp=frame.stamp,
+                    position=(float(p_table[0]), float(p_table[1]), z),
+                    orientation_xyzw=slot.orientation_xyzw,
+                    object_id=f"tablet_{sample_id}",
+                    provenance=DataProvenance.VISION_INFERENCE,
+                    uncertainty=unc,
+                    confidence=detection.confidence,
+                    source=mode,
+                ),
+                "missing_base_table_tf",
+            )
+        t_base_table = self.tf.lookup(base_frame, "table_frame", frame.stamp)
+        p_base = transform_point(t_base_table, np.array([p_table[0], p_table[1], z]))
+        return (
+            PoseRecord(
+                frame_id=base_frame,
+                stamp=frame.stamp,
+                position=(float(p_base[0]), float(p_base[1]), float(p_base[2])),
+                orientation_xyzw=slot.orientation_xyzw,
+                object_id=f"tablet_{sample_id}",
+                calibration_id=self.tf.version,
+                uncertainty=unc,
+                confidence=detection.confidence,
+                source=mode,
+                provenance=DataProvenance.VISION_INFERENCE,
+            ),
+            "ok",
+        )
+
     def tablet_pose_in_base(
         self,
         sample_id: str,
@@ -111,6 +202,7 @@ class PoseEstimator:
             uncertainty=Uncertainty(0.0025, 0.015, source="slot_template"),
             confidence=0.9,
             source="registry_slot",
+            provenance=DataProvenance.SIMULATION,
         )
 
     def pixel_to_table_point(

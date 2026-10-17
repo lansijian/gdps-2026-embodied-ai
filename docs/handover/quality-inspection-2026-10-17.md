@@ -1,5 +1,26 @@
 # 质检赛道交接 — 2026-10-17（Cursor）
 
+## Phase 2 更新（真实性 / 安全 / 只读接口）
+
+- `GDPS_QI_EXECUTION_MODE=simulation` 才允许 `register_simulation_workstation()` 与 `use_mock_detections`。
+- P1：`pickup_confirmed` 仅当 `verified_pickup_visual=True`；dry-run 永不伪成功。
+- P2：旋盖模拟与 `committed` 分离，需 `verified_*` 标志才 COMMIT。
+- P3：校验通过后才写入 `loaded_slots`；缺质量不当作 0。
+- P4：`simulation_centrifuge_stopped` 仅 simulation 模式。
+- 臂/手 **hardware_writes_disabled**；无 live token 占位。
+- 运动学：`SimplifiedTestKinematics` 仅单测；现场 `G1UrdfKinematicsAdapter` + `GDPS_G1_URDF_PATH`。
+- 只读适配器：`gdps_qi/adapters/readonly/{head_camera,robot_state,dex3_state}.py`
+- 机载依赖：见 `docs/deployment/g1-qi-onboard-deps.md`
+
+### 现场第一批只读命令
+
+```bash
+export GDPS_QI_EXECUTION_MODE=field
+python3 scripts/g1/qi_hardware_probe_readonly.py --ros2
+# 配置后（勿提交密码）：
+# export GDPS_G1_URDF_PATH=/path/to/g1_body29_hand14.urdf
+```
+
 ## 运行（Windows 离线）
 
 ```powershell

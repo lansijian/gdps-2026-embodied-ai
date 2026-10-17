@@ -5,7 +5,8 @@ from typing import Dict, List
 
 from gdps_qi.execution.skill_executor import SkillExecutor
 from gdps_qi.planning.motion_safety_gate import SafetyContext
-from gdps_qi.types import SkillPhase, SkillRequest, SkillResult
+from gdps_qi.runtime.execution_mode import allow_simulation_assets
+from gdps_qi.types import SkillPhase, SkillRequest, SkillResult, UploadServerStatus
 
 
 @dataclass
@@ -20,6 +21,7 @@ class QcRecord:
 @dataclass
 class MissionTailState:
     centrifuge_stopped: bool = False
+    centrifuge_stop_evidence: str = ""
     qc: Dict[str, QcRecord] = field(default_factory=dict)
     report_pending: List[Dict[str, object]] = field(default_factory=list)
 
@@ -31,17 +33,30 @@ def register_p456_skills(executor: SkillExecutor, state: MissionTailState) -> No
 
 
 def _p4_unload(state: MissionTailState, request: SkillRequest, ctx: SafetyContext) -> SkillResult:
-    if not state.centrifuge_stopped and not request.safety_context.get("force_stopped", False):
-        return SkillResult(
-            status="SAFE_HOLD",
-            phase=SkillPhase.VERIFY,
-            errors=["centrifuge_not_confirmed_stopped"],
-        )
+    evidence = str(request.safety_context.get("centrifuge_stop_evidence", "")).strip()
+    sim_override = (
+        allow_simulation_assets()
+        and request.safety_context.get("simulation_centrifuge_stopped") is True
+    )
+    if not state.centrifuge_stopped and not evidence:
+        if sim_override:
+            evidence = "simulation_only"
+        else:
+            return SkillResult(
+                status="SAFE_HOLD",
+                phase=SkillPhase.VERIFY,
+                errors=["centrifuge_not_confirmed_stopped"],
+            )
+    if evidence:
+        state.centrifuge_stop_evidence = evidence
     state.centrifuge_stopped = True
     return SkillResult(
         status="COMMIT",
         phase=SkillPhase.COMMIT,
-        verification={"tubes_returned": request.safety_context.get("tube_ids", [])},
+        verification={
+            "tubes_returned": request.safety_context.get("tube_ids", []),
+            "stop_evidence": state.centrifuge_stop_evidence,
+        },
     )
 
 
@@ -97,10 +112,18 @@ def _p6_sort_report(
         )
     upload = uploader.upload_batch(records, idempotency_key=request.safety_context.get("idempotency_key", "run1"))
     state.report_pending = records
-    status = "COMMIT" if upload.ack else "SAFE_HOLD"
+    if upload.server_status is UploadServerStatus.ACK:
+        status = "COMMIT"
+        errors: List[str] = []
+    elif upload.local_write_ok:
+        status = "SAFE_HOLD"
+        errors = ["upload_pending_no_server_ack"]
+    else:
+        status = "SAFE_HOLD"
+        errors = ["upload_local_write_failed"]
     return SkillResult(
         status=status,
         phase=SkillPhase.COMMIT if upload.ack else SkillPhase.SAFE_HOLD,
         verification={"upload": upload.as_dict(), "records": records},
-        errors=[] if upload.ack else ["upload_no_ack"],
+        errors=errors,
     )

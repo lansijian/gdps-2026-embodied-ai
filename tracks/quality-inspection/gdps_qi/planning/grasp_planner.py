@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Tuple
+from typing import Literal, Optional, Tuple, Union
 
 import numpy as np
 
-from gdps_qi.kinematics.arm_kinematics import ArmKinematics
+from gdps_qi.kinematics.arm_kinematics import ArmKinematics, IkResult
+from gdps_qi.kinematics.kinematics_backend import KinematicsBackend, SimplifiedTestKinematics
 from gdps_qi.math_se3 import compose_transform, invert_transform, transform_from_pose
-from gdps_qi.registry.object_registry import GraspTemplate, ObjectRegistry
-from gdps_qi.types import PoseRecord, Uncertainty
+from gdps_qi.registry.object_registry import ObjectRegistry
+from gdps_qi.types import PoseRecord
 
 
 HandChoice = Literal["left", "right"]
+KinematicsModel = Union[ArmKinematics, KinematicsBackend]
 
 
 @dataclass
@@ -23,17 +24,28 @@ class GraspPlan:
     lift: PoseRecord
     joint_seed: Tuple[float, ...]
     reachable: bool
+    hardware_joint_targets_allowed: bool
     message: str = ""
 
 
 @dataclass
 class GraspPlanner:
     registry: ObjectRegistry
-    kinematics: ArmKinematics
+    kinematics: KinematicsModel
     max_uncertainty_m: float = 0.004
 
     def choose_hand(self, object_position_base: Tuple[float, float, float]) -> HandChoice:
         return "left" if object_position_base[1] >= 0.0 else "right"
+
+    def _ik(self, target_t: np.ndarray, seed: Tuple[float, ...]) -> IkResult:
+        if isinstance(self.kinematics, KinematicsBackend):
+            return self.kinematics.ik(target_t, seed)
+        return self.kinematics.ik(target_t, seed)
+
+    def _hardware_allowed(self) -> bool:
+        if isinstance(self.kinematics, KinematicsBackend):
+            return self.kinematics.allow_hardware_joint_targets()
+        return False
 
     def plan_tablet_grasp(
         self,
@@ -50,7 +62,19 @@ class GraspPlanner:
                 lift=tablet_pose_base,
                 joint_seed=tuple(0.0 for _ in range(7)),
                 reachable=False,
+                hardware_joint_targets_allowed=False,
                 message="uncertainty_too_high",
+            )
+        if template.min_edge_gap_m < 0.0008:
+            return GraspPlan(
+                hand="left",
+                pregrasp=tablet_pose_base,
+                grasp=tablet_pose_base,
+                lift=tablet_pose_base,
+                joint_seed=tuple(0.0 for _ in range(7)),
+                reachable=False,
+                hardware_joint_targets_allowed=False,
+                message="insufficient_edge_gap",
             )
         t_base_object = transform_from_pose(tablet_pose_base.position, tablet_pose_base.orientation_xyzw)
         t_object_grasp = transform_from_pose(
@@ -69,23 +93,40 @@ class GraspPlanner:
         t_base_wrist_pre = compose_transform(t_base_pre, invert_transform(wrist_tcp))
         t_base_wrist_lift = compose_transform(lift, invert_transform(wrist_tcp))
         seed = tuple(0.0 for _ in range(7))
-        ik = self.kinematics.ik(t_base_wrist_grasp, seed)
+        hw_ok = self._hardware_allowed()
+        ok_pre, ik_pre = self._segment_ok(t_base_wrist_pre, seed, "pregrasp")
+        ok_gr, ik_gr = self._segment_ok(t_base_wrist_grasp, ik_pre.joint_positions if ok_pre else seed, "grasp")
+        ok_lift, ik_lift = self._segment_ok(
+            t_base_wrist_lift, ik_gr.joint_positions if ok_gr else seed, "lift"
+        )
+        reachable = ok_pre and ok_gr and ok_lift
         pre_pose = self._pose_from_transform(tablet_pose_base.frame_id, t_base_wrist_pre, tablet_pose_base)
         grasp_pose = self._pose_from_transform(tablet_pose_base.frame_id, t_base_wrist_grasp, tablet_pose_base)
         lift_pose = self._pose_from_transform(tablet_pose_base.frame_id, t_base_wrist_lift, tablet_pose_base)
+        joint_seed = ik_gr.joint_positions if reachable else seed
+        if reachable and not hw_ok:
+            joint_seed = tuple(0.0 for _ in range(7))
+        msg = "ok" if reachable else f"segment_failed:{ik_gr.message}"
         return GraspPlan(
             hand=hand,
             pregrasp=pre_pose,
             grasp=grasp_pose,
             lift=lift_pose,
-            joint_seed=ik.joint_positions if ik.success else seed,
-            reachable=ik.success,
-            message=ik.message if ik.success else f"ik_failed:{ik.message}",
+            joint_seed=joint_seed,
+            reachable=reachable,
+            hardware_joint_targets_allowed=hw_ok and reachable,
+            message=msg,
         )
 
-    def _pose_from_transform(
-        self, frame_id: str, t: np.ndarray, ref: PoseRecord
-    ) -> PoseRecord:
+    def _segment_ok(self, target_t: np.ndarray, seed: Tuple[float, ...], label: str) -> Tuple[bool, IkResult]:
+        if isinstance(self.kinematics, KinematicsBackend) and hasattr(
+            self.kinematics, "check_segment_reachable"
+        ):
+            return self.kinematics.check_segment_reachable(seed, target_t, label)
+        ik = self._ik(target_t, seed)
+        return ik.success, ik
+
+    def _pose_from_transform(self, frame_id: str, t: np.ndarray, ref: PoseRecord) -> PoseRecord:
         from gdps_qi.math_se3 import rot_to_quat
 
         q = rot_to_quat(t[:3, :3])
@@ -100,4 +141,5 @@ class GraspPlanner:
             uncertainty=ref.uncertainty,
             confidence=ref.confidence,
             source="grasp_planner",
+            provenance=ref.provenance,
         )

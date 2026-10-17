@@ -41,7 +41,11 @@ class RecoveryTests(unittest.TestCase):
                 object_refs={},
                 calibration_refs=[],
                 allowed_actuation=False,
-                safety_context={"cap_stuck": True, "unscrew_steps": 3},
+                safety_context={
+                    "allow_simulation_unscrew": True,
+                    "cap_stuck": True,
+                    "unscrew_steps": 3,
+                },
             ),
             ctx,
         )

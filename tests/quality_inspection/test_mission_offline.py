@@ -19,21 +19,15 @@ class MissionOfflineTests(unittest.TestCase):
         ok, errs = reg.validate_unique_ids()
         self.assertTrue(ok, errs)
 
-    def test_p1_offline_commit(self) -> None:
+    def test_p1_offline_never_commits_without_pickup_verify(self) -> None:
         mc = MissionController.build_offline()
-        # Bring table into simplified arm workspace for mock IK.
-        mc.register_workstation_once()
-        kin = ArmKinematics()
-        kin.position_tolerance_m = 0.02
-        mc.executor.grasp_planner.kinematics = kin
         result = mc.run_offline_p1_sample01()
-        self.assertIn(result.status, ("COMMIT", "SAFE_HOLD", "ABORT"))
+        self.assertIn(result.status, ("SAFE_HOLD", "REFINE", "RETRY"))
 
     def test_full_offline_mission_flow(self) -> None:
         mc = MissionController.build_offline()
-        kin = ArmKinematics()
-        kin.position_tolerance_m = 0.02
-        mc.executor.grasp_planner.kinematics = kin
+        mc.deadline.total_budget_s = 50000.0
+        mc.deadline.started_mono = __import__("time").monotonic()
         summary = mc.run_full_offline_mission()
         self.assertIn("samples", summary)
         self.assertEqual(len(summary["samples"]), 6)
@@ -41,11 +35,11 @@ class MissionOfflineTests(unittest.TestCase):
     def test_deadline_budget(self) -> None:
         import time
 
-        dm = DeadlineManager(total_budget_s=1800.0, started_at=time.time())
-        ok, _ = dm.should_continue(("P1", "P2", "P3", "P4", "P5", "P6"))
+        dm = DeadlineManager(total_budget_s=7200.0, started_mono=time.monotonic())
+        ok, _ = dm.should_continue(samples_remaining=1, include_centrifuge=False, include_p4_p5_p6=False)
         self.assertTrue(ok)
-        dm.started_at = time.time() - 2000.0
-        ok2, msg = dm.should_continue(("P1", "P2"))
+        dm.started_mono = time.monotonic() - 8000.0
+        ok2, msg = dm.should_continue(samples_remaining=2)
         self.assertFalse(ok2)
         self.assertIn("insufficient_time", msg)
 
@@ -62,6 +56,7 @@ class MissionOfflineTests(unittest.TestCase):
         r2 = up.upload_batch([{"sample_id": "01"}], "key1")
         self.assertIs(r1, r2)
         self.assertFalse(r1.ack)
+        self.assertEqual(r1.server_status.value, "PENDING")
 
 
 if __name__ == "__main__":

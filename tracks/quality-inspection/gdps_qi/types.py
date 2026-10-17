@@ -14,6 +14,22 @@ class VerificationStatus(str, enum.Enum):
     UNSUPPORTED = "UNSUPPORTED"
 
 
+class DataProvenance(str, enum.Enum):
+    MOCK = "MOCK"
+    SIMULATION = "SIMULATION"
+    SENSOR_READ = "SENSOR_READ"
+    VISION_INFERENCE = "VISION_INFERENCE"
+    CALIBRATION_FILE = "CALIBRATION_FILE"
+    VERIFIED_FIELD = "VERIFIED_FIELD"
+
+
+class UploadServerStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    ACK = "ACK"
+    FAILED = "FAILED"
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+
+
 class SkillPhase(str, enum.Enum):
     PREPARE = "PREPARE"
     OBSERVE = "OBSERVE"
@@ -71,6 +87,7 @@ class PoseRecord:
     uncertainty: Optional[Uncertainty] = None
     confidence: float = 0.0
     source: str = ""
+    provenance: DataProvenance = DataProvenance.MOCK
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -91,6 +108,7 @@ class PoseRecord:
             ),
             "confidence": self.confidence,
             "source": self.source,
+            "provenance": self.provenance.value,
         }
 
 

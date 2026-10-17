@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -32,6 +32,7 @@ class TransformError(Exception):
 class TransformManager:
     max_age_s: float = 0.25
     _edges: Dict[Tuple[str, str], TransformEdge] = field(default_factory=dict)
+    _history: Dict[Tuple[str, str], List[TransformEdge]] = field(default_factory=dict)
     version: str = "v0"
 
     def set_transform(
@@ -42,8 +43,16 @@ class TransformManager:
         stamp: float,
         calibration_id: str,
         static: bool = False,
+        allow_conflict: bool = False,
     ) -> None:
-        self._edges[(parent, child)] = TransformEdge(
+        key = (parent, child)
+        if key in self._edges and not allow_conflict:
+            prev = self._edges[key]
+            if not np.allclose(prev.t_parent_child, t_parent_child, atol=1e-9):
+                raise TransformError(f"conflicting edge {parent}->{child}")
+        if self._introduces_cycle(parent, child, key):
+            raise TransformError(f"cycle if adding {parent}->{child}")
+        edge = TransformEdge(
             parent=parent,
             child=child,
             t_parent_child=t_parent_child.copy(),
@@ -51,22 +60,57 @@ class TransformManager:
             calibration_id=calibration_id,
             static=static,
         )
+        self._edges[key] = edge
+        hist = self._history.setdefault(key, [])
+        hist.append(edge)
         self.version = f"v{int(stamp * 1000)}"
 
     def lookup(self, parent: str, child: str, stamp: Optional[float] = None) -> np.ndarray:
         if parent == child:
             return np.eye(4, dtype=float)
-        now = stamp if stamp is not None else time.time()
+        query_stamp = stamp if stamp is not None else time.time()
         path = self._find_path(parent, child)
         if not path:
             raise TransformError(f"no path from {child} to {parent}")
         t = np.eye(4)
         for edge in path:
-            if not edge.static and (now - edge.stamp) > self.max_age_s:
+            edge_tf = self._edge_at_stamp(edge, query_stamp)
+            if not edge.static and (query_stamp - edge_tf.stamp) > self.max_age_s:
                 raise TransformError(f"stale transform {edge.parent}->{edge.child}")
-            # child frame -> parent frame: compose as T_parent_child @ T_accum
-            t = compose_transform(edge.t_parent_child, t)
+            t = compose_transform(edge_tf.t_parent_child, t)
         return t
+
+    def lookup_inverse(self, child: str, parent: str, stamp: Optional[float] = None) -> np.ndarray:
+        t_parent_child = self.lookup(parent, child, stamp)
+        return invert_transform(t_parent_child)
+
+    def can_transform(self, parent: str, child: str) -> bool:
+        try:
+            self.lookup(parent, child)
+            return True
+        except TransformError:
+            return False
+
+    def _edge_at_stamp(self, edge: TransformEdge, query_stamp: float) -> TransformEdge:
+        if edge.static:
+            return edge
+        key = (edge.parent, edge.child)
+        hist = self._history.get(key, [edge])
+        best = edge
+        best_dt = abs(query_stamp - edge.stamp)
+        for candidate in hist:
+            dt = abs(query_stamp - candidate.stamp)
+            if dt < best_dt:
+                best_dt = dt
+                best = candidate
+        return best
+
+    def _introduces_cycle(self, parent: str, child: str, new_key: Tuple[str, str]) -> bool:
+        if parent == child:
+            return True
+        if new_key in self._edges:
+            return False
+        return self._find_path(parent, child) is not None
 
     def lookup_pose(
         self, target_frame: str, source_frame: str, stamp: Optional[float] = None
@@ -91,11 +135,9 @@ class TransformManager:
     def _find_path(self, parent: str, child: str) -> Optional[list]:
         if parent == child:
             return []
-        # BFS on directed edges parent->child stored as T_parent_child
         from collections import deque
 
-        start = (child, [])
-        q = deque([start])
+        q = deque([(child, [])])
         visited = {child}
         while q:
             frame, edges_acc = q.popleft()
@@ -105,22 +147,7 @@ class TransformManager:
                 if c != frame or p in visited:
                     continue
                 visited.add(p)
-                q.append(
-                    (
-                        p,
-                        edges_acc
-                        + [
-                            TransformEdge(
-                                parent=p,
-                                child=frame,
-                                t_parent_child=edge.t_parent_child,
-                                stamp=edge.stamp,
-                                calibration_id=edge.calibration_id,
-                                static=edge.static,
-                            )
-                        ],
-                    )
-                )
+                q.append((p, edges_acc + [edge]))
         return None
 
     def set_from_pose_record(self, parent: str, child: str, pose: PoseRecord, static: bool = False) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, Optional
 
 from gdps_qi.adapters.dex3_hand import GRASP_CAP_TWIST, GRASP_TUBE_BODY, HandCommand
 from gdps_qi.execution.skill_executor import SkillExecutor
@@ -12,11 +12,13 @@ from gdps_qi.types import SkillPhase, SkillRequest, SkillResult
 @dataclass
 class TubePrepRecord:
     sample_id: str
-    mass_g: float = 0.0
-    cap_open: bool = False
-    tablet_inserted: bool = False
-    cap_closed: bool = False
+    mass_g: Optional[float] = None
+    mass_recorded: bool = False
+    cap_open_verified: bool = False
+    tablet_insert_verified: bool = False
+    cap_closed_verified: bool = False
     committed: bool = False
+    sim_unscrew_steps_done: int = 0
 
 
 @dataclass
@@ -38,8 +40,15 @@ def _p2_prep_sample(
     if sid not in executor.pose_estimator.registry.samples:
         return SkillResult(status="ABORT", phase=SkillPhase.ABORT, errors=["unknown_sample"])
     rec = state.records.setdefault(sid, TubePrepRecord(sample_id=sid))
-    mass = float(request.safety_context.get("mock_mass_g", 12.3))
-    rec.mass_g = mass
+    sc = request.safety_context
+
+    if sc.get("verified_mass_g") is not None:
+        rec.mass_g = float(sc["verified_mass_g"])
+        rec.mass_recorded = True
+    elif sc.get("mock_mass_g") is not None and sc.get("allow_simulation_mass"):
+        rec.mass_g = float(sc["mock_mass_g"])
+        rec.mass_recorded = False
+
     allow = request.allowed_actuation and ctx.live_motion_authorized
     ok_body, _ = executor.hands.send_command(
         HandCommand(side="left", joint_targets=GRASP_TUBE_BODY), allow_live=allow
@@ -49,28 +58,51 @@ def _p2_prep_sample(
     )
     if not (ok_body and ok_cap):
         return SkillResult(status="RETRY", phase=SkillPhase.EXECUTE, errors=["hand_command_failed"])
-    # Conservative incremental unscrew simulation (no unbounded rotation).
-    steps = int(request.safety_context.get("unscrew_steps", 3))
-    for i in range(steps):
-        if request.safety_context.get("cap_stuck", False) and i > 0:
-            return SkillResult(
-                status="RECOVER",
-                phase=SkillPhase.RECOVER,
-                errors=["cap_stuck_detected"],
-                verification={"step": i},
-            )
-    rec.cap_open = True
-    rec.tablet_inserted = True
-    rec.cap_closed = True
+
+    if sc.get("verified_cap_open"):
+        rec.cap_open_verified = True
+    if sc.get("verified_tablet_inserted"):
+        rec.tablet_insert_verified = True
+    if sc.get("verified_cap_closed"):
+        rec.cap_closed_verified = True
+
+    if sc.get("allow_simulation_unscrew"):
+        steps = int(sc.get("unscrew_steps", 0))
+        for i in range(steps):
+            if sc.get("cap_stuck", False) and i > 0:
+                return SkillResult(
+                    status="RECOVER",
+                    phase=SkillPhase.RECOVER,
+                    errors=["cap_stuck_detected"],
+                    verification={"step": i, "ledger_committed": False},
+                )
+        rec.sim_unscrew_steps_done = steps
+
+    if not (rec.cap_open_verified and rec.tablet_insert_verified and rec.cap_closed_verified):
+        return SkillResult(
+            status="SAFE_HOLD",
+            phase=SkillPhase.VERIFY,
+            verification={
+                "cap_open_verified": rec.cap_open_verified,
+                "tablet_insert_verified": rec.tablet_insert_verified,
+                "cap_closed_verified": rec.cap_closed_verified,
+                "mass_recorded": rec.mass_recorded,
+                "sim_unscrew_steps_done": rec.sim_unscrew_steps_done,
+            },
+            errors=["prep_not_verified"],
+        )
+
     rec.committed = True
     return SkillResult(
         status="COMMIT",
         phase=SkillPhase.COMMIT,
         verification={
             "mass_g": rec.mass_g,
-            "cap_open": rec.cap_open,
-            "tablet_inserted": rec.tablet_inserted,
-            "cap_closed": rec.cap_closed,
+            "mass_recorded": rec.mass_recorded,
+            "cap_open_verified": True,
+            "tablet_insert_verified": True,
+            "cap_closed_verified": True,
+            "committed": True,
         },
-        observations={"unscrew_steps": steps},
+        observations={"sim_unscrew_steps_done": rec.sim_unscrew_steps_done},
     )

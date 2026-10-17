@@ -37,7 +37,7 @@ class Dex3HandAdapter:
     interface_status: VerificationStatus = VerificationStatus.DOCUMENTED_UNVERIFIED
     _state: Dict[str, HandState] = field(default_factory=dict)
     _cmd_log: List[Dict[str, object]] = field(default_factory=list)
-    _live_enabled: bool = False
+    hardware_writes_enabled: bool = False
 
     def connect(self) -> int:
         now = time.time()
@@ -57,24 +57,24 @@ class Dex3HandAdapter:
     def send_command(self, cmd: HandCommand, allow_live: bool) -> Tuple[bool, str]:
         if len(cmd.joint_targets) != DEX3_JOINT_COUNT:
             return False, "joint count mismatch"
-        if not allow_live or not self._live_enabled:
-            self._cmd_log.append(
-                {
-                    "type": "hand_dry_run",
-                    "side": cmd.side,
-                    "targets": cmd.joint_targets,
-                    "mode": cmd.mode,
-                    "stamp": time.time(),
-                }
-            )
-            self._state[cmd.side] = HandState(
-                side=cmd.side,
-                joint_positions=cmd.joint_targets,
-                stamp=time.time(),
-                source="mock",
-            )
-            return True, "dry_run_recorded"
-        return False, "live_hand_motion_not_implemented"
+        if allow_live:
+            return False, "hardware_writes_disabled"
+        self._cmd_log.append(
+            {
+                "type": "hand_dry_run",
+                "side": cmd.side,
+                "targets": cmd.joint_targets,
+                "mode": cmd.mode,
+                "stamp": time.time(),
+            }
+        )
+        self._state[cmd.side] = HandState(
+            side=cmd.side,
+            joint_positions=cmd.joint_targets,
+            stamp=time.time(),
+            source="mock",
+        )
+        return True, "dry_run_recorded"
 
     @property
     def command_log(self) -> List[Dict[str, object]]:

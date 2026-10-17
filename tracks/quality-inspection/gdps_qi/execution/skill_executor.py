@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 from gdps_qi.adapters.camera import CameraAdapter
-from gdps_qi.adapters.dex3_hand import DEX3_JOINT_COUNT, Dex3HandAdapter, HandCommand, GRASP_TABLET_PINCH
+from gdps_qi.adapters.dex3_hand import Dex3HandAdapter, HandCommand
 from gdps_qi.adapters.robot_hardware import RobotHardwareAdapter
 from gdps_qi.evidence.evidence_recorder import EvidenceRecorder
 from gdps_qi.perception.pose_estimator import PoseEstimator
@@ -35,14 +35,24 @@ class SkillExecutor:
         ok_owner, msg = self.safety.acquire_owner(self.robot.owner)
         if not ok_owner:
             return SkillResult(status="ABORT", phase=SkillPhase.ABORT, errors=[msg])
-        if request.skill_name not in self._skills:
-            return SkillResult(
+        started = time.time()
+        try:
+            if request.skill_name not in self._skills:
+                result = SkillResult(
+                    status="ABORT",
+                    phase=SkillPhase.ABORT,
+                    errors=[f"unknown_skill:{request.skill_name}"],
+                )
+            else:
+                result = self._skills[request.skill_name](request, ctx)
+        except Exception as exc:
+            result = SkillResult(
                 status="ABORT",
                 phase=SkillPhase.ABORT,
-                errors=[f"unknown_skill:{request.skill_name}"],
+                errors=[f"skill_exception:{exc}"],
             )
-        started = time.time()
-        result = self._skills[request.skill_name](request, ctx)
+        finally:
+            self.safety.release_owner(self.robot.owner)
         ended = time.time()
         ev = ActionEvidence(
             task_id=ActionEvidence.new_task_id(),
@@ -57,7 +67,6 @@ class SkillExecutor:
         )
         self.evidence.record(ev)
         result.evidence.append(ev)
-        self.safety.release_owner(self.robot.owner)
         return result
 
     def dry_run_arm_and_hand(

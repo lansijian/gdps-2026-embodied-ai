@@ -18,10 +18,11 @@ class JointStateSnapshot:
 
 @dataclass
 class RobotHardwareAdapter:
-    """Exclusive owner for body/arm motion requests. Live actuation disabled by default."""
+    """Arm motion write path is disabled for Phase 2 (read-only field prep)."""
 
     owner: str = "gdps_quality_inspection"
     interface_status: VerificationStatus = VerificationStatus.DOCUMENTED_UNVERIFIED
+    hardware_writes_enabled: bool = False
     _joint_state: JointStateSnapshot = field(
         default_factory=lambda: JointStateSnapshot(
             names=tuple(f"joint_{i}" for i in range(29)),
@@ -31,7 +32,6 @@ class RobotHardwareAdapter:
         )
     )
     _motion_log: List[Dict[str, object]] = field(default_factory=list)
-    _live_enabled: bool = False
 
     def connect(self) -> int:
         return 0
@@ -61,25 +61,19 @@ class RobotHardwareAdapter:
     ) -> Tuple[bool, str]:
         if arm not in ("left", "right"):
             return False, "invalid arm"
-        if not allow_live or not self._live_enabled:
-            self._motion_log.append(
-                {
-                    "type": "arm_joint_dry_run",
-                    "arm": arm,
-                    "targets": joint_targets,
-                    "reason": reason,
-                    "stamp": time.time(),
-                }
-            )
-            return True, "dry_run_recorded"
-        return False, "live_arm_motion_not_implemented"
-
-    def enable_live_motion(self, token: str, confirm: str) -> None:
-        if confirm != "ENABLE LIVE ARM":
-            raise PermissionError("confirm phrase mismatch")
-        if token != "UNSET":
-            raise PermissionError("live token not configured for arms")
-        self._live_enabled = True
+        self._motion_log.append(
+            {
+                "type": "arm_joint_dry_run",
+                "arm": arm,
+                "targets": joint_targets,
+                "reason": reason,
+                "stamp": time.time(),
+                "allow_live_requested": allow_live,
+            }
+        )
+        if allow_live:
+            return False, "hardware_writes_disabled"
+        return True, "dry_run_recorded"
 
     @property
     def motion_log(self) -> List[Dict[str, object]]:

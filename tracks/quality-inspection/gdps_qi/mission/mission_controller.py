@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,12 +13,13 @@ from gdps_qi.adapters.dex3_hand import Dex3HandAdapter
 from gdps_qi.adapters.robot_hardware import RobotHardwareAdapter
 from gdps_qi.evidence.evidence_recorder import EvidenceRecorder
 from gdps_qi.execution.skill_executor import SkillExecutor
-from gdps_qi.kinematics.arm_kinematics import ArmKinematics
+from gdps_qi.kinematics.kinematics_backend import G1UrdfKinematicsAdapter, SimplifiedTestKinematics
 from gdps_qi.mission.deadline_manager import DeadlineManager
 from gdps_qi.perception.pose_estimator import PoseEstimator
 from gdps_qi.planning.grasp_planner import GraspPlanner
 from gdps_qi.planning.motion_safety_gate import MotionSafetyGate, SafetyContext
 from gdps_qi.registry.object_registry import ObjectRegistry
+from gdps_qi.runtime.execution_mode import ExecutionMode, allow_simulation_assets, get_execution_mode
 from gdps_qi.skills.p1_tablet import register_p1_skills
 from gdps_qi.skills.p2_tube import P2State, register_p2_skills
 from gdps_qi.skills.p3_centrifuge import CentrifugeState, register_p3_skills
@@ -34,15 +36,22 @@ class MissionController:
     calibration: CalibrationManager
     deadline: DeadlineManager
     executor: SkillExecutor
+    execution_mode: ExecutionMode = ExecutionMode.FIELD
     p2_state: P2State = field(default_factory=P2State)
     p3_state: CentrifugeState = field(default_factory=CentrifugeState)
     tail_state: MissionTailState = field(default_factory=MissionTailState)
     phase: MissionPhase = MissionPhase.P1_TABLET
-    _global_registered: bool = False
+    _sim_workstation_registered: bool = False
     results: List[SkillResult] = field(default_factory=list)
 
     @classmethod
-    def build_offline(cls, calibration_path: Optional[Path] = None) -> "MissionController":
+    def build(
+        cls,
+        calibration_path: Optional[Path] = None,
+        urdf_path: Optional[str] = None,
+        execution_mode: Optional[ExecutionMode] = None,
+    ) -> "MissionController":
+        mode = execution_mode or get_execution_mode()
         registry = ObjectRegistry.default_six_sample_layout()
         tf = TransformManager(max_age_s=2.0)
         calibration = CalibrationManager()
@@ -58,7 +67,13 @@ class MissionController:
         hands.connect()
         camera.connect()
         pose_estimator = PoseEstimator(tf=tf, registry=registry)
-        kinematics = ArmKinematics()
+        if mode is ExecutionMode.SIMULATION:
+            kinematics = SimplifiedTestKinematics()
+        else:
+            kinematics = G1UrdfKinematicsAdapter(
+                urdf_path=urdf_path or os.environ.get("GDPS_G1_URDF_PATH"),
+                verified_on_robot=False,
+            )
         grasp_planner = GraspPlanner(registry=registry, kinematics=kinematics)
         safety = MotionSafetyGate(calibration=calibration)
         evidence = EvidenceRecorder(output_dir=Path("logs/quality-inspection"))
@@ -77,6 +92,7 @@ class MissionController:
             calibration=calibration,
             deadline=DeadlineManager(),
             executor=executor,
+            execution_mode=mode,
             p2_state=P2State(),
             p3_state=CentrifugeState(),
             tail_state=MissionTailState(),
@@ -84,18 +100,24 @@ class MissionController:
         mc._register_skills()
         return mc
 
+    @classmethod
+    def build_offline(cls, calibration_path: Optional[Path] = None) -> "MissionController":
+        os.environ["GDPS_QI_EXECUTION_MODE"] = "simulation"
+        return cls.build(calibration_path=calibration_path, execution_mode=ExecutionMode.SIMULATION)
+
     def _register_skills(self) -> None:
         register_p1_skills(self.executor)
         register_p2_skills(self.executor, self.p2_state)
         register_p3_skills(self.executor, self.p3_state)
         register_p456_skills(self.executor, self.tail_state)
 
-    def register_workstation_once(self) -> None:
-        if self._global_registered:
+    def register_simulation_workstation(self) -> None:
+        if not allow_simulation_assets():
+            raise RuntimeError("simulation workstation only allowed in SIMULATION mode")
+        if self._sim_workstation_registered:
             return
-        # Static edges for offline demo; field replaces with measured calibration.
         stamp = time.time()
-        cid = "offline_demo"
+        cid = "simulation_not_verified"
         self.tf.set_transform(
             "robot_center",
             "table_frame",
@@ -113,22 +135,21 @@ class MissionController:
             static=False,
         )
         self.tf.set_transform(
+            "head_camera_optical",
             "table_frame",
-            "scale_frame",
             np.eye(4),
             stamp,
             cid,
-            static=True,
+            static=False,
         )
-        self._global_registered = True
+        self._sim_workstation_registered = True
 
     def _safety_context(self, live: bool = False) -> SafetyContext:
         ok_cal, _ = self.calibration.is_valid()
-        if self.calibration.bundle is None:
-            ok_cal = True  # offline demo allows mock TF registration
+        sim_ok = allow_simulation_assets() and self._sim_workstation_registered
         return SafetyContext(
             live_motion_authorized=live,
-            calibration_ok=ok_cal or self._global_registered,
+            calibration_ok=ok_cal or sim_ok,
             tf_version=self.tf.version,
             owner=self.executor.robot.owner,
             contact_allowed=False,
@@ -136,29 +157,31 @@ class MissionController:
         )
 
     def run_offline_p1_sample01(self) -> SkillResult:
-        self.register_workstation_once()
+        self.register_simulation_workstation()
         rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+        rgb[200:280, 250:350] = 180
         self.executor.camera.set_mock_frame(rgb)
         req = SkillRequest(
             skill_name="P1_PICK_TABLET_01",
             sample_id="01",
             object_refs={"tablet": "01"},
-            calibration_refs=["offline_demo"],
+            calibration_refs=["simulation_not_verified"],
             allowed_actuation=False,
-            safety_context={},
+            safety_context={"use_mock_detections": True},
         )
         result = self.executor.run(req, self._safety_context())
         self.results.append(result)
         return result
 
     def run_full_offline_mission(self) -> Dict[str, object]:
-        self.register_workstation_once()
+        self.register_simulation_workstation()
         rgb = np.zeros((480, 640, 3), dtype=np.uint8)
+        rgb[200:280, 250:350] = 180
         self.executor.camera.set_mock_frame(rgb)
         ctx = self._safety_context()
         summary: Dict[str, object] = {"samples": {}, "phases": []}
-        for sid in [f"{i:02d}" for i in range(1, 7)]:
-            if not self.deadline.should_continue(("P1", "P2"))[0]:
+        for i, sid in enumerate([f"{x:02d}" for x in range(1, 7)], start=1):
+            if not self.deadline.should_continue(samples_remaining=7 - i)[0]:
                 summary["aborted"] = "deadline"
                 break
             r1 = self.executor.run(
@@ -168,7 +191,7 @@ class MissionController:
                     object_refs={},
                     calibration_refs=[],
                     allowed_actuation=False,
-                    safety_context={},
+                    safety_context={"use_mock_detections": True},
                 ),
                 ctx,
             )
@@ -179,7 +202,15 @@ class MissionController:
                     object_refs={},
                     calibration_refs=[],
                     allowed_actuation=False,
-                    safety_context={"mock_mass_g": 10.0 + int(sid)},
+                    safety_context={
+                        "allow_simulation_mass": True,
+                        "mock_mass_g": 10.0 + int(sid),
+                        "allow_simulation_unscrew": True,
+                        "unscrew_steps": 2,
+                        "verified_cap_open": True,
+                        "verified_tablet_inserted": True,
+                        "verified_cap_closed": True,
+                    },
                 ),
                 ctx,
             )
@@ -201,7 +232,6 @@ class MissionController:
             ),
             ctx,
         )
-        self.tail_state.centrifuge_stopped = True
         r4 = self.executor.run(
             SkillRequest(
                 skill_name="P4_UNLOAD",
@@ -209,7 +239,10 @@ class MissionController:
                 object_refs={},
                 calibration_refs=[],
                 allowed_actuation=False,
-                safety_context={"tube_ids": load_order, "force_stopped": True},
+                safety_context={
+                    "tube_ids": load_order,
+                    "simulation_centrifuge_stopped": True,
+                },
             ),
             ctx,
         )
