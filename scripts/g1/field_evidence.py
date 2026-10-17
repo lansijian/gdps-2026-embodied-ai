@@ -64,6 +64,14 @@ def target_pixel(rgb):
     return float(cs[0][0][0]), float(cs[0][0][1])
 
 
+def save_rgb_png(path, image):
+    import cv2
+    ok, encoded = cv2.imencode(".png", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    if not ok:
+        raise OSError("PNG sample encoding failed")
+    Path(path).write_bytes(encoded.tobytes())  # pathlib also supports Windows Unicode directories.
+
+
 class EvidenceCollector:
     def __init__(self, args, source):
         self.args, self.source = args, source
@@ -95,6 +103,7 @@ class EvidenceCollector:
         self.tf_failures = []
         self.last_saved_stamp = None
         self.message_bag_stamps = {}
+        self.latest_camera_info = None
 
     def ingest(self, topic, msg, bag_stamp=None):
         self.counts[topic] = self.counts.get(topic, 0) + 1
@@ -117,6 +126,13 @@ class EvidenceCollector:
                 history[stamp(msg)] = bag_stamp
                 while len(history) > 24:
                     history.pop(next(iter(history)))
+                if topic == self.args.rgb_topic:
+                    self._save_rgb(msg)
+                elif topic == self.args.camera_info_topic:
+                    self.latest_camera_info = msg
+                    for row in self.rows["frames"]:
+                        if not row.get("rgbd_synchronized"):
+                            self._attach_camera_info(row, msg)
                 if self.filters:
                     self.filters[idx].signalMessage(msg)
             elif topic == self.args.pc_topic:
@@ -147,6 +163,65 @@ class EvidenceCollector:
             if len(self.errors) < 100:
                 self.errors.append({"topic": topic, "error": str(exc)})
 
+    def _attach_camera_info(self, row, msg):
+        """Valid intrinsics may support 2D without temporal synchrony; never establish 3D."""
+        from gdps_qi.adapters.camera import CameraInfo
+        try:
+            k = np.asarray(msg.k, dtype=float).reshape(3, 3)
+            valid = (np.isfinite(k).all() and k[0,0] > 0 and k[1,1] > 0
+                     and (msg.width, msg.height) == (row["width"], row["height"])
+                     and bool(msg.header.frame_id) and msg.header.frame_id == row["rgb_frame_id"])
+            row["camera_info_stamp_sec"] = stamp(msg)
+            row["bag_stamps_ns"][self.args.camera_info_topic] = self.message_bag_stamps.get(self.args.camera_info_topic, {}).get(stamp(msg))
+            row["camera_info_time_matched"] = abs(stamp(msg)-row["stamp"]) <= self.args.slop
+            row["intrinsics_trusted"] = bool(valid)
+            row["camera_info_valid_2d"] = bool(valid)
+            row["info"] = asdict(CameraInfo(msg.width, msg.height, float(k[0,0]), float(k[1,1]),
+                float(k[0,2]), float(k[1,2]), msg.header.frame_id, tuple(msg.d),
+                "ros_header_camera_info_2d", False)) if valid else None
+            row["raw_camera_info"] = {"k": list(msg.k), "d": list(msg.d), "r": list(msg.r), "p": list(msg.p)}
+        except Exception as exc:
+            row.update(info=None, intrinsics_trusted=False, camera_info_valid_2d=False,
+                       camera_info_error=str(exc))
+
+    def _save_rgb(self, msg):
+        # Save the original immediately, before waiting for optional Info/Depth or running a detector.
+        for row in self.rows["frames"]:
+            if (row["stamp"], row["rgb_frame_id"]) == (stamp(msg), msg.header.frame_id):
+                return row
+        if len(self.rows["frames"]) >= self.args.max_frames:
+            return None
+        if self.last_saved_stamp is not None and stamp(msg)-self.last_saved_stamp < self.args.sample_period:
+            return None
+        from cv_bridge import CvBridge
+        import cv2
+        if self.bridge is None:
+            self.bridge = CvBridge()
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
+        if image.shape[:2] != (msg.height, msg.width):
+            raise ValueError("rgb_resolution_mismatch")
+        idx = len(self.rows["frames"])
+        rgb_file, raw_file = "rgb_%03d.npy" % idx, "raw_rgb_%03d.npy" % idx
+        raw_png = "raw_rgb_%03d.png" % idx
+        np.save(self.root / rgb_file, image, allow_pickle=False)
+        np.save(self.root / raw_file, image, allow_pickle=False)
+        save_rgb_png(self.root / raw_png, image)
+        row = {"stamp": stamp(msg), "rgb_stamp_sec": stamp(msg), "depth_stamp_sec": None,
+            "camera_info_stamp_sec": None, "rgb_frame_id": msg.header.frame_id, "depth_frame_id": "",
+            "width": msg.width, "height": msg.height, "encoding": msg.encoding, "saved_encoding": "rgb8",
+            "rgb_file": rgb_file, "rgb_raw_file": raw_file, "rgb_raw_png": raw_png,
+            "depth_file": None, "info": None, "intrinsics_trusted": False,
+            "camera_info_valid_2d": False, "camera_info_time_matched": False,
+            "depth_scale_confirmed": False, "depth_aligned_to_rgb": False,
+            "rgbd_synchronized": False, "rectified": False, "tf": None,
+            "bag_stamps_ns": {self.args.rgb_topic: self.message_bag_stamps.get(self.args.rgb_topic, {}).get(stamp(msg))}}
+        self.rows["frames"].append(row)
+        self.pending.append(row)
+        self.last_saved_stamp = stamp(msg)
+        if self.latest_camera_info is not None:
+            self._attach_camera_info(row, self.latest_camera_info)
+        return row
+
     def rgbd(self, rgb, depth, info):
         # Foxy synchronizer holds its internal lock during callbacks; never raise here.
         try:
@@ -156,13 +231,21 @@ class EvidenceCollector:
                 self.errors.append({"topic": "rgbd_sync", "error": str(exc)})
 
     def _rgbd(self, rgb, depth, info):
-        if len(self.rows["frames"]) >= self.args.max_frames:
+        saved = self._save_rgb(rgb)
+        if saved is None:
             return
-        if self.last_saved_stamp is not None and stamp(rgb) - self.last_saved_stamp < self.args.sample_period:
+        # Guard headers even if called directly; the official filter remains the actual synchronizer.
+        if max(stamp(rgb), stamp(depth), stamp(info))-min(stamp(rgb), stamp(depth), stamp(info)) > self.args.slop:
+            self._attach_camera_info(saved, info)
+            saved["rgbd_error"] = "header_stamp_mismatch"
             return
         from cv_bridge import CvBridge
         if self.bridge is None:
             self.bridge = CvBridge()
+        self._attach_camera_info(saved, info)
+        if not saved["camera_info_valid_2d"]:
+            saved["rgbd_error"] = "camera_info_unusable_for_rgb"
+            return
         from image_geometry import PinholeCameraModel
         from gdps_qi.adapters.camera import CameraInfo
         # Raw -> rectified pixels and rays handled by the official Foxy camera model.
@@ -190,14 +273,12 @@ class EvidenceCollector:
         principal_ray = model.projectPixelTo3dRay((camera.cx, camera.cy))
         if not np.isfinite(principal_ray).all():
             raise ValueError("invalid_camera_projection_matrix")
-        idx = len(self.rows["frames"])
-        rgb_file = "rgb_%03d.npy" % idx
+        idx = self.rows["frames"].index(saved)
+        rgb_file = saved["rgb_file"]
         depth_file = "depth_%03d.npy" % idx
         np.save(self.root / rgb_file, image, allow_pickle=False)
-        np.save(self.root / ("raw_rgb_%03d.npy" % idx), raw_image, allow_pickle=False)
         np.save(self.root / ("raw_depth_%03d.npy" % idx), raw_depth_copy, allow_pickle=False)
-        if not cv2.imwrite(str(self.root / ("rgb_%03d.png" % idx)), cv2.cvtColor(image, cv2.COLOR_RGB2BGR)):
-            raise OSError("PNG sample export failed")
+        save_rgb_png(self.root / ("rgb_%03d.png" % idx), image)
         if scaled is not None:
             np.save(self.root / depth_file, scaled, allow_pickle=False)
         # Matching resolution is not proof of registration: explicit provenance + frame identity required.
@@ -214,14 +295,14 @@ class EvidenceCollector:
             "depth_aligned_to_rgb": bool(aligned), "registration_source": self.args.registration_source,
             "intrinsics_trusted": bool(camera.fx > 0 and camera.fy > 0),
             "principal_ray": list(principal_ray), "camera_model_backend": "image_geometry.PinholeCameraModel", "tf": None}
+        row.update(rgbd_synchronized=True, camera_info_valid_2d=True, camera_info_time_matched=True)
+        saved.pop("target_candidate", None)
+        saved.update(row)
         uv = target_pixel(image)
         if uv is not None:
-            row["target_candidate"] = {"uv": list(uv), "ray_camera": list(model.projectPixelTo3dRay(uv)),
+            saved["target_candidate"] = {"uv": list(uv), "ray_camera": list(model.projectPixelTo3dRay(uv)),
                                        "identity": "UNVERIFIED_circle_candidate", "backend": "image_geometry.PinholeCameraModel"}
         # Non-mono/non-identity rectification requires official depth_image_proc upstream; fail closed.
-        self.rows["frames"].append(row)
-        self.pending.append(row)
-        self.last_saved_stamp = stamp(rgb)
 
     def finish(self):
         from rclpy.time import Time

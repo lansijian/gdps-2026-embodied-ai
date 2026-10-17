@@ -13,6 +13,7 @@ WHITELIST = [
     'scripts/g1/replay_field_extract.py', 'scripts/g1/record_field_bag.sh',
     'scripts/g1/check_field_dependencies.py', 'scripts/g1/package_phase44.py',
     'scripts/g1/package_phase44.ps1', 'docs/deployment/phase44-field-replay.md',
+    'docs/deployment/phase441-field-capture.md',
     'docs/research/phase44-reuse.md', 'docs/research/phase44-source-refs.json',
     'docs/research/phase44-source-audit.json', 'THIRD_PARTY.md',
     'shared/__init__.py', 'shared/navigation/__init__.py',
@@ -37,7 +38,7 @@ def build(output):
         files[relative] = data
     manifest = ''.join(hashlib.sha256(v).hexdigest()+'  '+k+'\n' for k,v in sorted(files.items()))
     files['MANIFEST.sha256'] = manifest.encode()
-    files['BUNDLE.json'] = json.dumps({'source_commit':commit,'phase':'4.4','live_motion':False,
+    files['BUNDLE.json'] = json.dumps({'source_commit':commit,'phase':'4.4.1','live_motion':False,
         'whitelist_count':len(WHITELIST),'field_verified':False},indent=2).encode()
     output = Path(output)
     output.parent.mkdir(parents=True,exist_ok=True)
@@ -56,5 +57,5 @@ def build(output):
 
 if __name__ == '__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--out',default='dist/gdps-s05-phase44-readonly.zip')
+    p.add_argument('--out',default='dist/gdps-s05-phase441-readonly.zip')
     build(p.parse_args().out)

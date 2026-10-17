@@ -8,9 +8,11 @@ def test_full_six_samples_and_tail_terminates():
     for _ in range(100):
         visited.append((st.current_step.step_id, st.sample_index))
         _, phase = st.transition(True, specs)
-        if phase == "mission_complete": break
+        if phase == "mission_complete_upload_pending": break
     else: raise AssertionError("mission looped")
     assert st.done
+    assert st.local_report_saved
+    assert st.upload_status == "PENDING"
     assert len(visited) == 35
     assert [s for n,s in visited if n == "p1_pick_weigh"] == list(range(1,7))
     assert [s for n,s in visited if n == "p2_prepare_tube"] == list(range(1,7))
@@ -20,7 +22,7 @@ def test_full_six_samples_and_tail_terminates():
     assert "stabilize_pre_manip" in st.completed
     assert "manipulation_ready" in st.completed
     before = list(st.completed)
-    assert st.transition(True, specs)[1] == "mission_complete"
+    assert st.transition(True, specs)[1] == "mission_complete_upload_pending"
     assert st.completed == before
 
 

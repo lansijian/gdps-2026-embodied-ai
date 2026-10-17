@@ -11,7 +11,7 @@ from image_geometry import PinholeCameraModel
 from message_filters import SimpleFilter, ApproximateTimeSynchronizer
 
 
-def test_installed_foxy_sync_bridge_model_tf_contracts():
+def test_installed_foxy_sync_bridge_model_tf_contracts(tmp_path):
     rclpy.init()
     try:
         bridge=CvBridge()
@@ -24,6 +24,34 @@ def test_installed_foxy_sync_bridge_model_tf_contracts():
         info.r=[1.,0.,0.,0.,1.,0.,0.,0.,1.]
         info.p=[50.,0.,32.,0.,0.,50.,24.,0.,0.,0.,1.,0.]
         info.header.stamp.sec=10
+        # Exercise the real collector, not only library constructors, when run on G1 Foxy.
+        import argparse
+        import sys
+        from pathlib import Path
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts/g1'))
+        from field_evidence import EvidenceCollector, add_capture_arguments
+        from field_gates_centering import analyze
+        p=argparse.ArgumentParser();add_capture_arguments(p)
+        args=p.parse_args(['--out-dir',str(tmp_path/'capture'),'--rgb-topic','/rgb',
+                          '--depth-topic','/depth','--camera-info-topic','/info'])
+        collector=EvidenceCollector(args,'SYNTHETIC_TEST')
+        msg.header.frame_id=depth.header.frame_id=info.header.frame_id='camera'
+        collector.ingest('/rgb',msg)
+        assert len(collector.rows['frames'])==1
+        raw=collector.rows['frames'][0]['rgb_raw_file']
+        assert (collector.root/raw).is_file()
+        info.header.stamp.sec=1
+        collector.ingest('/info',info)
+        collector.ingest('/depth',depth)
+        row=collector.rows['frames'][0]
+        assert row['camera_info_valid_2d'] and not row['rgbd_synchronized']
+        info.header.stamp.sec=10
+        collector.ingest('/info',info)
+        assert len(collector.rows['frames'])==1 and row['rgbd_synchronized']
+        assert not row['depth_aligned_to_rgb']  # Registration has not been verified.
+        result=analyze({'data_source':'SYNTHETIC_TEST','rows':collector.rows},collector.root,'A')
+        assert result['rgb_status']=='RGB_RAW_OK' and result['rgbd_status']=='UNKNOWN'
+        assert not result['live_motion'] and not result['field_verified']
         fs=[SimpleFilter() for _ in range(3)]
         sync=ApproximateTimeSynchronizer(fs,8,.05)
         received=[];sync.registerCallback(lambda *ms:received.append(ms))

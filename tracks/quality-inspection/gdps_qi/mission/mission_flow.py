@@ -314,7 +314,7 @@ def default_specs() -> Dict[FlowNode, NodeSpec]:
             FlowNode.P6_REPORT,
             preconditions=["mission_tail_complete"],
             execute="aggregate evidence + upload",
-            verify="upload_ACK_or_local_write_ok",
+            verify="local_report_saved; upload_status=PENDING_without_server_ACK",
             timeout_s=60.0,
             max_retries=2,
             recover="local_json_fallback",
@@ -335,6 +335,8 @@ class MissionFlowState:
 
     entered_at: float = field(default_factory=time.monotonic)
     done: bool = False
+    local_report_saved: bool = False
+    upload_status: str = "PENDING"
 
     def pause(self) -> None:
         self.safe_hold = True
@@ -359,7 +361,7 @@ class MissionFlowState:
         if self.safe_hold:
             return self.current, "safe_hold_active"
         if self.done:
-            return self.current, "mission_complete"
+            return self.current, "mission_complete_upload_pending"
         step = self.current_step
         spec = specs[step.node]
         if time.monotonic() - self.entered_at > spec.timeout_s:
@@ -382,8 +384,11 @@ class MissionFlowState:
         if self.step_index + 1 < len(MISSION_FLOW_STEPS):
             self.step_index += 1
             return self.current, FlowPhase.EXECUTE.value
+        self.local_report_saved = True
+        # Local persistence completes local work only. No server ACK is inferred here.
+        self.upload_status = "PENDING"
         self.done = True
-        return self.current, "mission_complete"
+        return self.current, "mission_complete_upload_pending"
 
 
 def _step_index(step_id: str) -> int:

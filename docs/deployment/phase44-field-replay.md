@@ -1,3 +1,5 @@
+> Phase 4.4.1 更新：RGB 已独立保存，Gate B 的 Raw LiDAR/Scan/Odom 已分开。当前打包名与现场命令以 [Phase 4.4.1 操作单](phase441-field-capture.md) 为准；本文件保留 Phase 4.4 历史说明。
+
 # Phase 4.4｜独立只读采集与回放操作单
 
 本包仅订阅、保存证据、分析与 Dry-run。没有运动 SDK、发布器、服务调用、LowCmd/HandCmd/SportCmd/SetVelocity 入口。不要使用 Phase 4.1 旧 ZIP；不要覆盖现有导航目录。Windows 不需要 ROS，也不直接反序列化 ROS 消息。

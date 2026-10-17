@@ -36,35 +36,55 @@ def analyze(e, root, gate):
             frame = load_frame(root, row)
             sync = assess_rgbd_sync(frame)
             frames.append({'stamp': row['stamp'], 'sync': sync.__dict__,
+                'rgb_valid': bool(frame.rgb.size and frame.rgb.ndim == 3 and frame.rgb.shape[2] == 3),
+                'resolution': [frame.rgb.shape[1], frame.rgb.shape[0]],
+                'raw_rgb_file': row.get('rgb_raw_file', row['rgb_file']), 'raw_rgb_png': row.get('rgb_raw_png'),
                 'rgb_file': row['rgb_file'], 'depth_file': row['depth_file'],
                 'finite_depth_fraction': float((np.isfinite(frame.depth_m) & (frame.depth_m > .05) & (frame.depth_m < 4)).mean()) if frame.depth_m is not None else None})
         out.update(frames=frames, statistics=series_stats(rows.get('frames', [])),
                    discovery=e.get('discovery'), qos=e.get('qos'), valid_frames=sum(x['sync']['ok'] for x in frames))
-        out['status'] = 'OK' if out['valid_frames'] else 'UNKNOWN'
+        out['valid_rgb_frames'] = sum(x['rgb_valid'] for x in frames)
+        out['rgb_status'] = 'RGB_RAW_OK' if out['valid_rgb_frames'] else 'UNKNOWN'
+        out['rgbd_status'] = 'OK' if out['valid_frames'] else 'UNKNOWN'
+        out['status'] = 'OK' if out['valid_rgb_frames'] else 'UNKNOWN'
     elif gate == 'B':
         out['streams'] = {k: {'statistics': series_stats(rows.get(k, [])), 'samples': rows.get(k, [])}
                           for k in ('pc', 'scan', 'odom')}
         reference = e.get('time_reference')
         for k, stream in out['streams'].items():
+            samples = stream['samples']
+            errors = []
             last = stream['statistics']['last_stamp']
             age = reference-last if reference is not None and last is not None else None
             stream['age_s'] = age
+            if not samples:
+                errors.append('missing:' + k)
             if age is not None and (age < -.05 or age > .5):
-                out['errors'].append('stale_or_future:' + k)
-        missing = [k for k in ('pc','scan','odom') if not rows.get(k)]
-        out['errors'].extend(['missing:' + k for k in missing])
-        valid = all(rows.get(k) and any(x.get('valid_points', 0) > 0 for x in rows[k]) for k in ('pc','scan'))
-        if not valid: out['errors'].append('no_valid_obstacle_returns')
-        if any(out['streams'][k]['statistics']['non_monotonic'] for k in out['streams']):
-            out['errors'].append('non_monotonic_sensor_time')
-        if len(rows.get('odom', [])) >= 2:
-            a,b = rows['odom'][0],rows['odom'][-1]
-            out['odom_delta'] = odom_delta(a,b)
-            if a['frame_id'] != b['frame_id'] or a['child'] != b['child']:
-                out['errors'].append('odom_frame_changed')
-        else: out['errors'].append('insufficient_odom_for_delta')
-        out['status'] = 'OK' if not out['errors'] else 'UNKNOWN'
+                errors.append('stale_or_future:' + k)
+            if stream['statistics']['non_monotonic']:
+                errors.append('non_monotonic_sensor_time:' + k)
+            if k == 'pc' and samples and not any(x.get('finite_xyz_points', x.get('valid_points', 0)) > 0 for x in samples):
+                errors.append('no_valid_pointcloud_returns')
+            if k == 'scan' and samples and not any(x.get('valid_points', 0) > 0 for x in samples):
+                errors.append('no_valid_scan_returns')
+            if k == 'odom':
+                if len(samples) < 2:
+                    errors.append('insufficient_odom_for_delta')
+                elif len({(x['frame_id'], x['child']) for x in samples}) != 1:
+                    errors.append('odom_frame_changed')
+                else:
+                    out['odom_delta'] = odom_delta(samples[0], samples[-1])
+            stream.update(status='OK' if not errors else 'UNKNOWN', errors=errors)
+            out['errors'].extend(errors)
+        # Scan and odom are independent capabilities, not prerequisites for raw LiDAR acquisition.
+        out['LIDAR_RAW_OK'] = out['streams']['pc']['status'] == 'OK'
+        out['lidar_raw_status'] = 'LIDAR_RAW_OK' if out['LIDAR_RAW_OK'] else 'UNKNOWN'
+        out['scan_status'] = out['streams']['scan']['status']
+        out['odom_status'] = out['streams']['odom']['status']
+        out['all_streams_ok'] = all(s['status'] == 'OK' for s in out['streams'].values())
+        out['status'] = out['streams']['pc']['status']
         out['direction_frame'] = 'sensor frame; robot directions require separately verified extrinsics'
+        out['body_directions_calibrated'] = False
     elif gate in ('C', 'D'):
         measurements = []
         for row in rows.get('frames', []):
@@ -80,7 +100,8 @@ def analyze(e, root, gate):
             saved = row.get("target_candidate")
             ray = saved["ray_camera"] if saved and np.allclose(saved["uv"], uv, atol=0.01) else None
             est = estimate_target_range(frame, *uv, t, camera_ray=ray)
-            m = {'stamp': row['stamp'], 'status': 'OK' if est.valid else 'UNKNOWN',
+            m = {'stamp': row['stamp'], 'status': 'OK' if gate == 'C' or est.valid else 'UNKNOWN',
+                 'pixel_2d_status': 'OK', 'localization_3d_status': 'OK' if est.valid else 'UNKNOWN',
                  'target_identity': 'UNVERIFIED_circle_candidate', 'pixel_du': uv[0]-frame.info.cx,
                  'pixel_dv': uv[1]-frame.info.cy, 'range': est.__dict__}
             if gate == 'D':
@@ -98,7 +119,7 @@ def analyze(e, root, gate):
             m['odom'] = near if near and abs(near['stamp']-row['stamp']) <= 0.1 else None
             measurements.append(m)
         out['measurements'] = measurements
-        zs = [m['range']['depth_axis_m'] for m in measurements if m['status']=='OK']
+        zs = [m['range']['depth_axis_m'] for m in measurements if m.get('range', {}).get('valid')]
         out['depth_repeatability'] = {'n': len(zs), 'std_m': float(np.std(zs, ddof=1)) if len(zs)>1 else None,
             'condition': 'operator must confirm same target and static capture before interpreting repeatability'}
         matched = [m for m in measurements if m.get('odom') and m['status']=='OK']
@@ -161,7 +182,7 @@ def main():
                 result.update(status='FAIL', errors=[acquisition_error])
         except Exception as exc:
             result = {'gate': gate, 'data_source': e['data_source'], 'status': 'FAIL',
-                      'errors': [str(exc)], 'field_verified': False}
+                      'errors': [str(exc)], 'field_verified': False, 'live_motion': False}
         output['gates'][gate] = result
     root.mkdir(parents=True, exist_ok=True)
     content = json.dumps(output, indent=2, ensure_ascii=False, allow_nan=False)

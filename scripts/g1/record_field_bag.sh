@@ -35,21 +35,49 @@ QOS_FILE="$(mktemp)"
 trap 'rm -f "$QOS_FILE"' EXIT
 printf '/tf_static:\n  history: keep_last\n  depth: 100\n  reliability: reliable\n  durability: transient_local\n' > "$QOS_FILE"
 # SIGINT lets rosbag2 flush metadata. Monitor free space each second and stop at reserve.
+BAG_PID=""
+RECORDER_RC=0
+FORCED_STOP=0
+stop_recorder() {
+  [[ -n "$BAG_PID" ]] || return 0
+  if kill -0 "$BAG_PID" 2>/dev/null; then
+    kill -INT "$BAG_PID" 2>/dev/null || :
+    for ((flush=0; flush<100; flush++)); do
+      kill -0 "$BAG_PID" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "$BAG_PID" 2>/dev/null; then
+      FORCED_STOP=1
+      echo 'Recorder did not flush within 10s; terminating this recorder only.' >&2
+      kill -TERM "$BAG_PID" 2>/dev/null || :
+      for ((flush=0; flush<20; flush++)); do
+        kill -0 "$BAG_PID" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -0 "$BAG_PID" 2>/dev/null && kill -KILL "$BAG_PID" 2>/dev/null || :
+    fi
+  fi
+  wait "$BAG_PID" || RECORDER_RC=$?
+  BAG_PID=""
+}
+cleanup() {
+  stop_recorder
+  rm -f "$QOS_FILE"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 ros2 bag record --qos-profile-overrides-path "$QOS_FILE" -o "$OUT" "${TOPICS[@]}" &
 BAG_PID=$!
-trap 'kill -INT "$BAG_PID" 2>/dev/null || :; wait "$BAG_PID" || :; rm -f "$QOS_FILE"' EXIT INT TERM
 for ((i=0; i<DURATION; i++)); do
   kill -0 "$BAG_PID" 2>/dev/null || break
   sleep 1
   FREE_KB="$(df -Pk "$(dirname "$OUT")" | awk 'NR==2 {print $4}')"
   (( FREE_KB >= ${MIN_FREE_KB:-2097152} )) || { echo 'Disk reserve reached'; break; }
 done
-kill -INT "$BAG_PID" 2>/dev/null || :
-set +e
-wait "$BAG_PID"
-RC=$?
-set -e
-trap 'rm -f "$QOS_FILE"' EXIT
+stop_recorder
+RC=$RECORDER_RC
+(( FORCED_STOP == 0 )) || { echo 'Recording interrupted without graceful flush' >&2; exit 1; }
 [[ -s "$OUT/metadata.yaml" ]] || { echo "Recording failed: exit=$RC, metadata missing" >&2; exit 1; }
 if (( RC != 0 && RC != 130 )); then echo "Recorder failed: exit=$RC" >&2; exit 1; fi
 ros2 bag info "$OUT"
