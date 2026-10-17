@@ -99,3 +99,14 @@ class ObstacleMonitor:
             return self.last_decision
         self.last_decision = AvoidDecision.CLEAR
         return self.last_decision
+
+    def sector_ranges(self) -> dict:
+        """Last-scan sector mins (lidar frame unless extrinsic verified)."""
+        return {
+            "min_forward_m": self.last_min_forward,
+            "n_forward": self.stats.get("n_forward"),
+            "n_left": self.stats.get("n_left"),
+            "n_right": self.stats.get("n_right"),
+            "decision": self.last_decision.value,
+            "frame_extrinsic_verified": self.frame_extrinsic_verified,
+        }

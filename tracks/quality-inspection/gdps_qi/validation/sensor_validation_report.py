@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -63,22 +64,39 @@ def _std(vals: List[float]) -> Optional[float]:
     return (sum((x - m) ** 2 for x in vals) / (len(vals) - 1)) ** 0.5
 
 
+@dataclass
+class LidarDepthAgreement:
+    fusion_allowed: bool
+    compare_allowed: bool
+    reasons: List[str] = field(default_factory=list)
+
+
 def assess_lidar_depth_agreement(
     depth_m: Optional[float],
     lidar_m: Optional[float],
     extrinsic_verified: bool,
     overlap_assumed: bool,
+    same_target_correspondence: bool,
+    tf_trusted: bool,
     tolerance_m: float = 0.25,
-) -> tuple[bool, List[str]]:
+) -> LidarDepthAgreement:
     reasons: List[str] = []
     if not extrinsic_verified:
         reasons.append("extrinsic_unverified")
     if not overlap_assumed:
         reasons.append("fov_overlap_unverified")
+    if not same_target_correspondence:
+        reasons.append("target_correspondence_unverified")
+    if not tf_trusted:
+        reasons.append("tf_not_trusted")
     if depth_m is None or lidar_m is None:
         reasons.append("missing_measurement")
-        return False, reasons
-    if abs(depth_m - lidar_m) > tolerance_m:
+        return LidarDepthAgreement(False, False, reasons)
+    if not math.isfinite(depth_m) or not math.isfinite(lidar_m) or min(depth_m, lidar_m) <= 0:
+        reasons.append("invalid_measurement")
+    if reasons:
+        return LidarDepthAgreement(False, False, reasons)
+    compare_allowed = abs(depth_m - lidar_m) <= tolerance_m
+    if not compare_allowed:
         reasons.append("range_conflict")
-        return False, reasons
-    return True, reasons
+    return LidarDepthAgreement(fusion_allowed=False, compare_allowed=compare_allowed, reasons=reasons)

@@ -1,0 +1,112 @@
+[
+  {
+    "repo": "ros2/geometry2",
+    "ref": "foxy",
+    "sha": "d1dc38b8a0e706fbd67a800a241fee950fce39f4",
+    "paths": [
+      "examples_tf2_py/README.md",
+      "examples_tf2_py/examples_tf2_py/__init__.py",
+      "tf2_geometry_msgs/src/tf2_geometry_msgs/__init__.py",
+      "tf2_kdl/src/tf2_kdl/__init__.py",
+      "tf2_py/test/__init__.py",
+      "tf2_py/test/test_buffer_core.py",
+      "tf2_py/tf2_py/__init__.py",
+      "tf2_ros/src/tf2_ros/__init__.py",
+      "tf2_ros/src/tf2_ros/buffer.py",
+      "tf2_ros/src/tf2_ros/transform_listener.py",
+      "tf2_ros/test/py_test/test_buffer.py",
+      "tf2_sensor_msgs/src/tf2_sensor_msgs/__init__.py"
+    ]
+  },
+  {
+    "repo": "ros2/message_filters",
+    "ref": "foxy",
+    "sha": "5042d46bee8d4e31f64fe5610c1c4c2401e62788",
+    "paths": [
+      "src/message_filters/__init__.py"
+    ]
+  },
+  {
+    "repo": "ros-perception/vision_opencv",
+    "ref": "foxy",
+    "sha": "72152d9d1d8edcfcafd707a1d0103810db8613ba",
+    "paths": [
+      "README.md",
+      "cv_bridge/README.md",
+      "cv_bridge/python/cv_bridge/__init__.py",
+      "cv_bridge/python/cv_bridge/core.py",
+      "image_geometry/image_geometry/__init__.py",
+      "image_geometry/image_geometry/cameramodels.py",
+      "opencv_tests/opencv_tests/__init__.py"
+    ]
+  },
+  {
+    "repo": "ros-perception/image_pipeline",
+    "ref": "foxy",
+    "sha": "7dcd819d5d39ccacba6171969dd959967955b579",
+    "paths": [
+      "README.md",
+      "camera_calibration/src/camera_calibration/__init__.py",
+      "camera_calibration/src/camera_calibration/nodes/__init__.py",
+      "depth_image_proc/src/register.cpp",
+      "stereo_image_proc/test/data/README.md",
+      "tracetools_image_pipeline/README.md"
+    ]
+  },
+  {
+    "repo": "ros-perception/pointcloud_to_laserscan",
+    "ref": "foxy",
+    "sha": "21c8973506b559fbeaf662b181b8a0d2f0955658",
+    "paths": [
+      "README.md",
+      "src/pointcloud_to_laserscan_node.cpp"
+    ]
+  },
+  {
+    "repo": "unitreerobotics/teleimager",
+    "ref": "main",
+    "sha": "ee4422b6e50ebe1f7448bfb4869fe1ae983fec37",
+    "paths": [
+      "README.md",
+      "README_zh-CN.md",
+      "src/teleimager/__init__.py"
+    ]
+  },
+  {
+    "repo": "unitreerobotics/xr_teleoperate",
+    "ref": "main",
+    "sha": "817fb00c63cde15e5f24a0f8fa08e1e33ed89d3b",
+    "paths": [
+      "README.md",
+      "README_ja-JP.md",
+      "README_zh-CN.md",
+      "assets/g1/README.md",
+      "assets/h1_2/README.md"
+    ]
+  },
+  {
+    "repo": "Livox-SDK/livox_ros_driver2",
+    "ref": "master",
+    "sha": "21445540f0d100dc86a7e6df312dd70bbdb4afdf",
+    "paths": [
+      "README.md"
+    ]
+  },
+  {
+    "repo": "ros2/rosbag2",
+    "ref": "foxy",
+    "sha": "77f5a51b4d5cd70ea6a78d53cffe964e3b9afaf7",
+    "paths": [
+      "README.md",
+      "ros2bag/ros2bag/__init__.py",
+      "ros2bag/ros2bag/api/__init__.py",
+      "ros2bag/ros2bag/command/__init__.py",
+      "ros2bag/ros2bag/verb/__init__.py",
+      "ros2bag/ros2bag/verb/play.py",
+      "ros2bag/ros2bag/verb/record.py",
+      "rosbag2_storage_evaluation/README.md",
+      "rosbag2_transport/rosbag2_transport/__init__.py",
+      "zstd_vendor/README.md"
+    ]
+  }
+]

@@ -15,6 +15,7 @@ from gdps_qi.types import VerificationStatus
 @dataclass
 class CameraReadOnlyConfig:
     depth_scale_m: Optional[float] = None
+    depth_registration_source: str = ""
     allow_16uc1_depth: bool = False
     treat_mono16_as_depth: bool = False
     max_rgb_depth_stamp_delta_s: float = 0.05
@@ -144,6 +145,7 @@ class HeadCameraReadOnly:
                 if aligned:
                     self._last_frame.depth_m = ddec.depth_m
                     self._last_frame.depth_frame_id = ddec.frame_id
+                    self._last_frame.depth_stamp_sec = ddec.stamp_sec
                     self._last_frame.depth_scale_confirmed = True
                     self._last_frame.depth_aligned_to_rgb = True
                     report["depth_usable"] = True
@@ -165,8 +167,14 @@ class HeadCameraReadOnly:
         if self._last_frame is None or self._last_frame.rgb is None:
             return False, "no_rgb_for_alignment"
         cfg = self.camera_cfg
+        if not cfg.depth_registration_source:
+            return False, "depth_registration_unverified"
+        if not ddec.frame_id or ddec.frame_id != self._last_frame.rgb_frame_id:
+            return False, "rgb_depth_frame_mismatch"
         rgb_stamp = self._rgb_meta.get("stamp_sec")
         depth_stamp = ddec.stamp_sec
+        if rgb_stamp is None or depth_stamp is None:
+            return False, "rgb_depth_header_stamp_missing"
         if rgb_stamp is not None and depth_stamp is not None:
             if abs(float(rgb_stamp) - float(depth_stamp)) > cfg.max_rgb_depth_stamp_delta_s:
                 return False, "rgb_depth_stamp_mismatch"
@@ -216,6 +224,8 @@ class HeadCameraReadOnly:
             stamp=float(sensor_stamp),
             info=info,
             host_received_at=host_received_at,
+            rgb_stamp_sec=decoded.stamp_sec,
+            camera_info_stamp_sec=self._camera_info_stamp,
             rgb_frame_id=decoded.frame_id,
             intrinsics_trusted=trusted,
         )

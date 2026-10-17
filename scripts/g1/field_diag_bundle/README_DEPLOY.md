@@ -1,3 +1,5 @@
+> Phase 4.4: this legacy package does not contain the current Gate A-E/replay toolchain. Use `scripts/g1/package_phase44.ps1` and `docs/deployment/phase44-field-replay.md`; unpack into a new directory.
+
 # G1 质检只读现场诊断包（Phase 4）
 
 ## 目的

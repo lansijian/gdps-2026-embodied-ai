@@ -36,6 +36,9 @@ class CameraFrame:
     stamp: float
     info: Optional[CameraInfo]
     host_received_at: float = 0.0
+    rgb_stamp_sec: Optional[float] = None
+    depth_stamp_sec: Optional[float] = None
+    camera_info_stamp_sec: Optional[float] = None
     rgb_frame_id: str = ""
     depth_frame_id: str = ""
     depth_scale_confirmed: bool = False

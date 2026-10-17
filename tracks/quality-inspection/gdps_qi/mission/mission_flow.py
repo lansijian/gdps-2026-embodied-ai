@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -59,28 +60,39 @@ class NodeSpec:
     motion_handoff: str = "navigation_release_before_manipulation"
 
 
-MISSION_FLOW_ORDER: Tuple[FlowNode, ...] = (
-    FlowNode.NAVIGATE_TO_STATION,
-    FlowNode.STABILIZE_BODY,
-    FlowNode.REGISTER_WORKSTATION,
-    FlowNode.VERIFY_CAMERA_AND_TF,
-    FlowNode.OBSERVE_TARGET,
-    FlowNode.ESTIMATE_3D_POSE,
-    FlowNode.VALIDATE_SENSOR_AND_TF,
-    FlowNode.CENTER_TARGET,
-    FlowNode.ADJUST_BODY_OR_WAIST,
-    FlowNode.REOBSERVE,
-    FlowNode.CHECK_REACHABLE_WORKSPACE,
-    FlowNode.STABILIZE_BODY,
-    FlowNode.MANIPULATION_READY,
-    FlowNode.P1_PICK_AND_WEIGH,
-    FlowNode.P2_PREPARE_TUBE,
-    FlowNode.REPEAT_6,
-    FlowNode.P3_CENTRIFUGE,
-    FlowNode.P4_UNLOAD,
-    FlowNode.P5_INSPECT,
-    FlowNode.P6_REPORT,
+@dataclass(frozen=True)
+class FlowStepId:
+    """Unique step instance (duplicate FlowNode values allowed)."""
+
+    step_id: str
+    node: FlowNode
+
+
+MISSION_FLOW_STEPS: Tuple[FlowStepId, ...] = (
+    FlowStepId("navigate_to_station", FlowNode.NAVIGATE_TO_STATION),
+    FlowStepId("stabilize_after_nav", FlowNode.STABILIZE_BODY),
+    FlowStepId("register_workstation", FlowNode.REGISTER_WORKSTATION),
+    FlowStepId("verify_camera_tf", FlowNode.VERIFY_CAMERA_AND_TF),
+    FlowStepId("observe_target", FlowNode.OBSERVE_TARGET),
+    FlowStepId("estimate_3d_pose", FlowNode.ESTIMATE_3D_POSE),
+    FlowStepId("validate_sensor_tf", FlowNode.VALIDATE_SENSOR_AND_TF),
+    FlowStepId("center_target", FlowNode.CENTER_TARGET),
+    FlowStepId("adjust_body_waist", FlowNode.ADJUST_BODY_OR_WAIST),
+    FlowStepId("reobserve", FlowNode.REOBSERVE),
+    FlowStepId("check_workspace", FlowNode.CHECK_REACHABLE_WORKSPACE),
+    FlowStepId("stabilize_pre_manip", FlowNode.STABILIZE_BODY),
+    FlowStepId("manipulation_ready", FlowNode.MANIPULATION_READY),
+    FlowStepId("p1_pick_weigh", FlowNode.P1_PICK_AND_WEIGH),
+    FlowStepId("p2_prepare_tube", FlowNode.P2_PREPARE_TUBE),
+    FlowStepId("repeat_six", FlowNode.REPEAT_6),
+    FlowStepId("p3_centrifuge", FlowNode.P3_CENTRIFUGE),
+    FlowStepId("p4_unload", FlowNode.P4_UNLOAD),
+    FlowStepId("p5_inspect", FlowNode.P5_INSPECT),
+    FlowStepId("p6_report", FlowNode.P6_REPORT),
 )
+
+# Legacy alias
+MISSION_FLOW_ORDER = tuple(s.node for s in MISSION_FLOW_STEPS)
 
 
 def default_specs() -> Dict[FlowNode, NodeSpec]:
@@ -314,32 +326,68 @@ def default_specs() -> Dict[FlowNode, NodeSpec]:
 
 @dataclass
 class MissionFlowState:
-    current: FlowNode = FlowNode.NAVIGATE_TO_STATION
+    step_index: int = 0
     sample_index: int = 1
-    retries: Dict[FlowNode, int] = field(default_factory=dict)
-    completed: List[FlowNode] = field(default_factory=list)
+    retries: Dict[str, int] = field(default_factory=dict)
+    completed: List[str] = field(default_factory=list)
     safe_hold: bool = False
     evidence: Dict[str, object] = field(default_factory=dict)
+
+    entered_at: float = field(default_factory=time.monotonic)
+    done: bool = False
+
+    def pause(self) -> None:
+        self.safe_hold = True
+
+    def recover(self, evidence_id: str) -> None:
+        if not evidence_id:
+            raise ValueError("recovery evidence required")
+        self.evidence["recovery"] = evidence_id
+        self.retries.pop(self.current_step.step_id, None)
+        self.safe_hold = False
+        self.entered_at = time.monotonic()
+
+    @property
+    def current_step(self) -> FlowStepId:
+        return MISSION_FLOW_STEPS[self.step_index]
+
+    @property
+    def current(self) -> FlowNode:
+        return self.current_step.node
 
     def transition(self, success: bool, specs: Dict[FlowNode, NodeSpec]) -> Tuple[FlowNode, str]:
         if self.safe_hold:
             return self.current, "safe_hold_active"
-        spec = specs[self.current]
+        if self.done:
+            return self.current, "mission_complete"
+        step = self.current_step
+        spec = specs[step.node]
+        if time.monotonic() - self.entered_at > spec.timeout_s:
+            self.safe_hold = True
+            return self.current, FlowPhase.TIMEOUT.value
         if not success:
-            r = self.retries.get(self.current, 0) + 1
-            self.retries[self.current] = r
+            r = self.retries.get(step.step_id, 0) + 1
+            self.retries[step.step_id] = r
             if r <= spec.max_retries:
                 return self.current, FlowPhase.RETRY.value
             self.safe_hold = True
             return self.current, FlowPhase.SAFE_HOLD.value
-        self.completed.append(self.current)
-        idx = MISSION_FLOW_ORDER.index(self.current)
-        if self.current is FlowNode.REPEAT_6:
-            if self.sample_index < 6:
-                self.sample_index += 1
-                self.current = FlowNode.P1_PICK_AND_WEIGH
-                return self.current, FlowPhase.EXECUTE.value
-        if idx + 1 < len(MISSION_FLOW_ORDER):
-            self.current = MISSION_FLOW_ORDER[idx + 1]
+        self.retries.pop(step.step_id, None)
+        self.completed.append(step.step_id)
+        self.entered_at = time.monotonic()
+        if step.node is FlowNode.REPEAT_6 and self.sample_index < 6:
+            self.sample_index += 1
+            self.step_index = _step_index("p1_pick_weigh")
             return self.current, FlowPhase.EXECUTE.value
+        if self.step_index + 1 < len(MISSION_FLOW_STEPS):
+            self.step_index += 1
+            return self.current, FlowPhase.EXECUTE.value
+        self.done = True
         return self.current, "mission_complete"
+
+
+def _step_index(step_id: str) -> int:
+    for i, s in enumerate(MISSION_FLOW_STEPS):
+        if s.step_id == step_id:
+            return i
+    raise KeyError(step_id)

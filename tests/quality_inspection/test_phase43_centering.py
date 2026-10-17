@@ -32,14 +32,6 @@ class Phase43CenteringTests(unittest.TestCase):
         )
         return tf
 
-    def test_lateral_direction_from_tf_not_pixel_sign(self) -> None:
-        ctrl = TargetCenteringController(tf=self._tf_with_camera())
-        lat, mode = ctrl.lateral_direction_from_tf(0.2)
-        self.assertEqual(lat, "left")
-        self.assertEqual(mode, CenteringMode.CENTER_BY_BODY_LATERAL)
-        lat2, _ = ctrl.lateral_direction_from_tf(-0.2)
-        self.assertEqual(lat2, "right")
-
     def test_centering_uses_cx_cy_not_image_center(self) -> None:
         tf = self._tf_with_camera()
         ctrl = TargetCenteringController(tf=tf)
@@ -52,6 +44,7 @@ class Phase43CenteringTests(unittest.TestCase):
             intrinsics_trusted=True,
             depth_scale_confirmed=True,
             depth_aligned_to_rgb=True,
+            rgb_stamp_sec=1.0, depth_stamp_sec=1.01, camera_info_stamp_sec=1.0,
         )
         det = Detection("t", "01", 0.9, (0, 0, 10, 10), (410.0, 300.0))
         res = ctrl.step(frame, det)
@@ -68,8 +61,8 @@ class Phase43CenteringTests(unittest.TestCase):
         nav = build_navigator()
         nav.safety.require_heartbeat = False
         info = CameraInfo(640, 480, 500, 500, 320, 240, verified=False)
-        t_cam = np.eye(4)
-        t_cam[0, 3] = 0.0
+        from gdps_qi.perception.camera_geometry import make_t_base_camera
+        t_cam = make_t_base_camera()
         sim = LateralClosedLoopSimulator(
             nav=nav,
             world_target=(1.0, 0.25, 0.5),
@@ -77,12 +70,11 @@ class Phase43CenteringTests(unittest.TestCase):
             camera_info=info,
         )
         ok, hist = sim.run(initial_pose_y=0.0)
-        self.assertTrue(hist)
-        self.assertTrue(
-            abs(hist[-1].pixel_du_after) < abs(hist[0].pixel_du)
-            or ok
-            or abs(hist[-1].bearing_rad) < abs(hist[0].bearing_rad)
-        )
+        self.assertGreaterEqual(len(hist), 2)
+        self.assertGreater(abs(hist[0].pixel_du), 50)
+        self.assertLess(abs(hist[-1].pixel_du_after), abs(hist[0].pixel_du) - 20)
+        for item in hist:
+            self.assertLess(abs(item.pixel_du_after), abs(item.pixel_du))
         nav.adapter.close()
 
     def test_manipulation_ready_requires_more_than_centered(self) -> None:

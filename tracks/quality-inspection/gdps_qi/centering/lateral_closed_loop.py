@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
-from gdps_qi.adapters.camera import CameraFrame, CameraInfo
-from gdps_qi.math_se3 import deproject_pixel, make_transform, transform_point
-from gdps_qi.perception.detection_types import Detection
+from gdps_qi.adapters.camera import CameraInfo
+from gdps_qi.perception.camera_geometry import (
+    ProjectionStatus,
+    choose_lateral_direction_by_reprojection,
+    make_t_base_camera,
+    project_base_point_to_pixel,
+    se2_apply_y,
+    optical_to_base_rotation,
+)
 from shared.navigation.api.navigator import MotionIntent, SharedNavigator
 from shared.navigation.api.types import Pose2D
 from shared.navigation.perception.obstacle_monitor import ScanFrame
@@ -21,6 +26,8 @@ class LateralLoopConfig:
     odom_vy_to_dy: float = 1.0
     pixel_tolerance_px: float = 15.0
     max_iterations: int = 8
+    trial_dy_m: float = 0.05
+    min_improvement_px: float = 1.0
 
 
 @dataclass
@@ -28,11 +35,12 @@ class LateralLoopIteration:
     iteration: int
     pixel_u: float
     pixel_du: float
-    bearing_rad: float
     cmd_vy: float
     odom_y_before: float
     odom_y_after: float
     pixel_du_after: float
+    lateral_choice: str
+    projection_status: str
 
 
 @dataclass
@@ -46,28 +54,16 @@ class LateralClosedLoopSimulator:
     cfg: LateralLoopConfig = field(default_factory=LateralLoopConfig)
     history: List[LateralLoopIteration] = field(default_factory=list)
 
-    @staticmethod
-    def optical_to_base_rotation() -> np.ndarray:
-        """ROS optical (x right, y down, z forward) with base x forward, y left, z up."""
-        return np.array([[0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]], dtype=float)
-
-    def _project_pixel_error(self, pose_y: float) -> Tuple[float, float, float]:
-        """Fixed target in base; robot lateral offset shifts camera +Y."""
+    def _t_at_pose_y(self, pose_y: float) -> np.ndarray:
         t = self.t_base_camera.copy()
-        if np.allclose(t[:3, :3], np.eye(3)):
-            t[:3, :3] = self.optical_to_base_rotation()
-        t[1, 3] = float(t[1, 3]) + pose_y
-        t_cam_base = np.linalg.inv(t)
-        p_b = np.array([self.world_target[0], self.world_target[1], self.world_target[2], 1.0])
-        p_c = t_cam_base @ p_b
-        if p_c[2] <= 0.01:
-            return self.camera_info.cx, 0.0, 0.0
-        u = self.camera_info.fx * (p_c[0] / p_c[2]) + self.camera_info.cx
-        du = u - self.camera_info.cx
-        bearing = math.atan2(self.world_target[1] - pose_y, max(self.world_target[0], 0.05))
-        return u, du, bearing
+        return se2_apply_y(pose_y, t)
+
+    def project_error(self, pose_y: float):
+        pr = project_base_point_to_pixel(self.world_target, self._t_at_pose_y(pose_y), self.camera_info)
+        return pr
 
     def run(self, initial_pose_y: float = 0.0) -> Tuple[bool, List[LateralLoopIteration]]:
+        self.history.clear()
         pose = Pose2D(0.0, initial_pose_y, 0.0, "odom")
         self.nav.safety.require_sensor = False
         self.nav.safety.require_odom = False
@@ -82,31 +78,45 @@ class LateralClosedLoopSimulator:
         self.nav.start()
         y = initial_pose_y
         ok = False
+        pr0 = self.project_error(y)
+        if pr0.status is not ProjectionStatus.OK:
+            return False, self.history
+        if abs(pr0.du) < 1e-3:
+            return False, self.history
         for i in range(self.cfg.max_iterations):
-            u, du, bearing = self._project_pixel_error(y)
-            intent = MotionIntent.LATERAL_LEFT if bearing > 0 else MotionIntent.LATERAL_RIGHT
+            t_cam = self._t_at_pose_y(y)
+            lat, du_before, du_candidate = choose_lateral_direction_by_reprojection(
+                self.world_target, t_cam, self.camera_info, self.cfg.trial_dy_m
+            )
+            if lat == "none":
+                break
+            intent = MotionIntent.LATERAL_LEFT if lat == "left" else MotionIntent.LATERAL_RIGHT
             cmd = self.nav.preview_motion(intent, speed_scale=self.cfg.vy_scale)
             dy = cmd.vy * self.cfg.step_dt_s * self.cfg.odom_vy_to_dy
             y_before = y
             y += dy
-            pose = Pose2D(0.0, y, 0.0, "odom")
-            self.nav.on_pose(pose)
-            _, du_after, _ = self._project_pixel_error(y)
+            pr_after = self.project_error(y)
+            du_after = pr_after.du if pr_after.status is ProjectionStatus.OK else du_before
             self.history.append(
                 LateralLoopIteration(
                     iteration=i,
-                    pixel_u=u,
-                    pixel_du=du,
-                    bearing_rad=bearing,
+                    pixel_u=self.camera_info.cx + du_before,
+                    pixel_du=du_before,
                     cmd_vy=cmd.vy,
                     odom_y_before=y_before,
                     odom_y_after=y,
                     pixel_du_after=du_after,
+                    lateral_choice=lat,
+                    projection_status=pr_after.status.value,
                 )
             )
+            if pr_after.status is not ProjectionStatus.OK:
+                break
             if abs(du_after) < self.cfg.pixel_tolerance_px:
                 ok = True
                 break
-            if abs(du_after) >= abs(du):
-                break
+            if abs(du_after) + self.cfg.min_improvement_px < abs(du_before):
+                du_before = du_after
+                continue
+            break
         return ok, self.history
