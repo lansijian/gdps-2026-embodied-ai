@@ -1,0 +1,16 @@
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwitcherClient
+
+ChannelFactoryInitialize(0, "eth0")
+msc = MotionSwitcherClient()
+msc.SetTimeout(10.0)
+msc.Init() if hasattr(msc, "Init") else None
+status, result = msc.CheckMode()
+print(f"CheckMode -> status={status}, result={result}")
+print(f"当前模式: {result.get('name', 'N/A')}")
+current = result.get("name", "")
+if current != "ai":
+    sret, sresult = msc.SelectMode(nameOrAlias="ai")
+    print(f"SelectMode('ai') -> status={sret}, result={sresult}")
+else:
+    print("✅ 当前已经是 ai 模式。")

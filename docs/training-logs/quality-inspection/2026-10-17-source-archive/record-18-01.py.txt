@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""
+g1_left_arm_calib.py — 单左臂关节校准测试（锁定右臂 + 腰部）。
+用法:
+  python3 g1_left_arm_calib.py --joint 15 --delta 30
+  python3 g1_left_arm_calib.py --joint 16 --delta -15
+"""
+import time, math, argparse
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_PITCH = 15
+LEFT_ROLL  = 16
+LEFT_YAW   = 17
+LEFT_ELBOW = 18
+RIGHT_ALL  = list(range(22, 29))
+WAIST_JOINTS = [12, 13, 14]
+K_ARM_WEIGHT = 29
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--iface", default="eth0")
+    p.add_argument("--joint", type=int, default=16, choices=[15,16,17,18])
+    p.add_argument("--delta", type=float, default=-15.0)
+    p.add_argument("--weight", type=float, default=0.4)
+    p.add_argument("--duration", type=float, default=2.5)
+    a = p.parse_args()
+
+    ChannelFactoryInitialize(0, a.iface)
+    state = {"msg": None}
+    sub = ChannelSubscriber("rt/lowstate", LowState_)
+    sub.Init(lambda m: state.__setitem__("msg", m), 10)
+    t0 = time.time()
+    while state["msg"] is None and time.time() - t0 < 5.0:
+        time.sleep(0.05)
+    if state["msg"] is None:
+        raise RuntimeError("未收到 lowstate")
+    msg0 = state["msg"]
+
+    q0 = msg0.motor_state[a.joint].q
+    delta_rad = np.deg2rad(a.delta)
+    q_target = q0 + delta_rad
+
+    if a.joint == LEFT_ROLL:
+        q_target = np.clip(q_target, -0.34, 3.11)
+    elif a.joint == LEFT_PITCH:
+        q_target = np.clip(q_target, -2.87, 2.87)
+
+    print(f"关节 {a.joint}: q0 = {q0:.4f} rad, 目标 = {q_target:.4f} rad, Δ = {a.delta}°, 权重上限 = {a.weight}")
+
+    pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+    pub.Init()
+    crc = CRC()
+    cmd = unitree_hg_msg_dds__LowCmd_()
+    lock_q = {j: msg0.motor_state[j].q for j in RIGHT_ALL + WAIST_JOINTS}
+
+    def tilt_rad(m):
+        qw, qx, qy, qz = m.imu_state.quaternion
+        gz = 1 - 2*(qx*qx + qy*qy)
+        return math.acos(max(-1.0, min(1.0, gz)))
+
+    def safe_write(q_left, weight):
+        m = state["msg"]
+        if m is None: return False
+        if tilt_rad(m) > 0.6:
+            print("⚠️ 倾斜超限，停止。"); return False
+        cmd.motor_cmd[K_ARM_WEIGHT].q = float(np.clip(weight, 0.0, a.weight))
+        cmd.motor_cmd[K_ARM_WEIGHT].kp = 0.0
+        cmd.motor_cmd[K_ARM_WEIGHT].kd = 0.0
+        cmd.motor_cmd[K_ARM_WEIGHT].tau = 0.0
+        for j in RIGHT_ALL:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = lock_q[j]
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 30.0
+            cmd.motor_cmd[j].kd = 1.0
+        for j in WAIST_JOINTS:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = lock_q[j]
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 50.0
+            cmd.motor_cmd[j].kd = 1.0
+        cmd.motor_cmd[a.joint].mode = 1
+        cmd.motor_cmd[a.joint].q = float(q_left)
+        cmd.motor_cmd[a.joint].dq = 0.0
+        cmd.motor_cmd[a.joint].tau = 0.0
+        cmd.motor_cmd[a.joint].kp = 40.0
+        cmd.motor_cmd[a.joint].kd = 1.5
+        for j in [15,16,17,18,19,20,21]:
+            if j == a.joint: continue
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = msg0.motor_state[j].q
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = 20.0
+            cmd.motor_cmd[j].kd = 1.0
+        cmd.crc = crc.Crc(cmd)
+        pub.Write(cmd)
+        return True
+
+    def ramp(q_from, q_to, w_from, w_to, sec):
+        n = max(1, int(sec * 50))
+        for i in range(n + 1):
+            r = 0.5 - 0.5 * math.cos(math.pi * i / n)
+            if not safe_write(q_from + (q_to-q_from)*r, w_from + (w_to-w_from)*r):
+                safe_write(q0, 0.0)
+                time.sleep(0.3)
+                raise RuntimeError("安全中止")
+            time.sleep(0.02)
+
+    print("\n⚠️ 5 秒后开始。")
+    for i in (5,4,3,2,1):
+        print(f"  {i}..."); time.sleep(1.0)
+
+    try:
+        ramp(q0, q0, 0.0, a.weight, 1.5)
+        ramp(q0, q_target, a.weight, a.weight, a.duration)
+        time.sleep(0.5)
+        ramp(q_target, q0, a.weight, a.weight, a.duration)
+        ramp(q0, q0, a.weight, 0.0, 1.5)
+        print("✅ 测试完成。")
+    except Exception as e:
+        print(f"❌ 中止: {e}")
+        safe_write(q0, 0.0)
+        time.sleep(0.3)
+
+    pub.Close()
+    sub.Close()
+
+if __name__ == "__main__":
+    main()

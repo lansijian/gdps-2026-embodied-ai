@@ -118,6 +118,8 @@ class AdapterTests(unittest.TestCase):
         os.environ["GDPS_G1_LIVE"] = "1"
         self.adapter.live_token = "secret"
         self.adapter.enable_live("secret", "ENABLE LIVE MOTION")
+        self.adapter.motion_authority_confirmed = True  # mock-only synthetic authorization
+        self.adapter.allowed_live_fsm_ids = (501,)
         self.adapter.send_velocity(VelocityCommand(vx=0.05, source="t"))
         self.assertEqual(len(self.backend.history), 1)
         self.adapter.stop("unit_test")
@@ -137,6 +139,8 @@ class AdapterTests(unittest.TestCase):
         os.environ["GDPS_G1_LIVE"] = "1"
         self.adapter.live_token = "secret"
         self.adapter.enable_live("secret", "ENABLE LIVE MOTION")
+        self.adapter.motion_authority_confirmed = True  # mock-only synthetic authorization
+        self.adapter.allowed_live_fsm_ids = (501,)
         self.backend.next_code = -12
         code = self.adapter.send_velocity(VelocityCommand(vx=0.05, source="t"))
         self.assertEqual(code, -12)

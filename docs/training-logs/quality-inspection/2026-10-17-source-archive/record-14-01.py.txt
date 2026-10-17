@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""抬双臂: 双肩 Pitch 40°, Roll ±15°, Elbow 25°。"""
+from g1_arm_base import run_arm_action, LEFT_ARM, RIGHT_ARM
+
+target = {
+    LEFT_ARM[0]: 40,  LEFT_ARM[1]: 15,  LEFT_ARM[3]: 25,
+    RIGHT_ARM[0]: 40, RIGHT_ARM[1]: -15, RIGHT_ARM[3]: 25,
+}
+run_arm_action(target, duration=3.0, hold=1.0)

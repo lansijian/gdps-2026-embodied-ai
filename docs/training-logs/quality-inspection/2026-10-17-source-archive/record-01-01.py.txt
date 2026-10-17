@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""
+g1_stand_from_lie_safe.py — 最保守的 SDK 起身尝试。
+仅调用官方 Damp() -> Lie2StandUp()，不发送任何自定义关节指令。
+前提：机器人已上电，周围清空，急停在手。
+"""
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    return ans == "yes"
+
+def main():
+    print("=== 保守起身脚本 ===")
+    print("警告：Lie2StandUp 官方要求机器人面朝上。")
+    print("如果机器人当前面朝下（趴着），请优先尝试手柄 L2+X。")
+    if not confirm("确认要继续用 SDK 尝试吗？"):
+        print("已取消。")
+        return
+
+    ChannelFactoryInitialize(0, "eth0")
+    c = LocoClient()
+    c.SetTimeout(10.0)
+    if hasattr(c, "Init"):
+        c.Init()
+
+    print("发送 Damp() ...")
+    ret_damp = c.Damp()
+    print(f"Damp() 返回: {ret_damp} (0=成功)")
+    time.sleep(1.0)
+
+    if not confirm("Damp 已完成。按 Enter 尝试 Lie2StandUp()，或输入 NO 取消..."):
+        print("已取消起身。")
+        return
+
+    print("发送 Lie2StandUp() ...")
+    if hasattr(c, "Lie2StandUp"):
+        ret = c.Lie2StandUp()
+    else:
+        print("未找到 Lie2StandUp()，尝试 SetFsmId(702) ...")
+        ret = c.SetFsmId(702)
+    print(f"返回: {ret} (0=成功)")
+    print("指令已发出。请密切观察机器人，急停保持在手。")
+    print("如果 5 秒内没有任何起身动作，或动作异常，立即按急停。")
+
+if __name__ == "__main__":
+    main()

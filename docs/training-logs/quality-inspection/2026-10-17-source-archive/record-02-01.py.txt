@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""
+prepare_walk.py — 将 G1 从 FSM 802 安全过渡到 500 (Start) + balance_mode=1。
+不发送任何速度指令。仅做状态过渡与确认。
+用法: python3 prepare_walk.py [--iface eth0]
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0", help="连接机器人的网卡 (默认 eth0)")
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    fsm = client.GetFsmId()
+    print(f"当前 FSM: {fsm}")
+
+    if fsm == 500:
+        print("已在 FSM 500，无需过渡。")
+    else:
+        confirm(
+            f"当前 FSM={fsm}。将尝试 SetFsmId(500) 进入 Start 状态。\n"
+            "请确认：机器人站立稳定、周围清空、急停在手。"
+        )
+        ret = client.SetFsmId(500)
+        print(f"SetFsmId(500) 返回: {ret}  (0 = 成功)")
+        if ret != 0:
+            print(
+                "过渡失败。若曾按过手柄 L2+… 组合，可能进入了 debug 模式，"
+                "请重启机器人后，仅用 L1+A -> L1+UP 进入正常模式再试。"
+            )
+            return
+        time.sleep(1.0)
+
+    try:
+        bm = client.GetBalanceMode()
+        print(f"当前 balance_mode: {bm}")
+    except Exception as e:
+        print(f"GetBalanceMode 异常: {e}")
+
+    ret = client.SetBalanceMode(1)
+    print(f"SetBalanceMode(1) 返回: {ret}  (0 = 成功)")
+    if ret == 0:
+        print("OK: 已进入连续步态 (balance_mode=1)。现在可以运行 move_pulse.py。")
+    else:
+        print("FAIL: 设置步态失败，移动指令可能仍被拒绝。")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,16 @@
+import time
+from unitree_sdk2py.g1.arm.g1_arm_action_client import G1ArmActionClient
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+
+ChannelFactoryInitialize(0, "eth0")
+c = G1ArmActionClient()
+c.SetTimeout(10.0)
+c.Init()
+
+print("执行 high wave (ID 26) ...")
+ret = c.ExecuteAction(26)
+print(f"返回: {ret}")
+time.sleep(3.0)
+print("释放动作 (ID 99) ...")
+c.ExecuteAction(99)
+print("完成。")

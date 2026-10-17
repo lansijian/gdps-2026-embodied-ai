@@ -1,0 +1,20 @@
+import time
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_
+
+ChannelFactoryInitialize(0, "eth0")
+latest = {"msg": None}
+def handler(msg): latest["msg"] = msg
+sub = ChannelSubscriber("rt/lowstate", LowState_)
+sub.Init(handler, 10)
+time.sleep(1.0)
+
+m = latest["msg"]
+if m is None:
+    print("未收到 lowstate")
+else:
+    print(f"mode_machine = {m.mode_machine}")
+    print(f"mode_pr      = {m.mode_pr}")
+    for idx, name in [(12, "WaistYaw"), (13, "WaistRoll"), (14, "WaistPitch")]:
+        print(f"  idx{idx} {name:12s}: q = {m.motor_state[idx].q:.4f}")
+sub.Close()

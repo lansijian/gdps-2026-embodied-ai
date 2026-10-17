@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""
+prepare_walk.py — 将 G1 从 FSM 802 过渡到 500 (Start) + balance_mode=1。
+不调用 GetFsmId()，直接尝试 SetFsmId(500) 或 Start()。
+"""
+import sys
+import time
+import argparse
+
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+
+def confirm(prompt):
+    ans = input(f"{prompt} [yes/NO]: ").strip().lower()
+    if ans != "yes":
+        print("操作已取消。")
+        sys.exit(0)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--iface", default="eth0")
+    args = parser.parse_args()
+
+    ChannelFactoryInitialize(0, args.iface)
+    client = LocoClient()
+    client.SetTimeout(10.0)
+    if hasattr(client, "Init"):
+        client.Init()
+
+    confirm(
+        "将尝试把机器人从当前状态设置到 FSM 500 (Start)。\n"
+        "请确认：机器人站立稳定、周围清空、急停在手。"
+    )
+
+    if hasattr(client, "SetFsmId"):
+        ret = client.SetFsmId(500)
+        print(f"SetFsmId(500) 返回: {ret}  (0 = 成功)")
+    elif hasattr(client, "Start"):
+        ret = client.Start()
+        print(f"Start() 返回: {ret}  (0 = 成功)")
+    else:
+        print("错误：当前 LocoClient 既没有 SetFsmId 也没有 Start，无法切换 FSM。")
+        print("请检查 unitree_sdk2py 是否安装正确，或升级 SDK。")
+        return
+
+    if ret != 0:
+        print("FSM 切换失败。若曾按过手柄 L2+… 组合，可能进入了 debug 模式。")
+        print("请重启机器人后，仅用 L1+A -> L1+UP 进入正常模式再试。")
+        return
+
+    time.sleep(1.0)
+
+    if hasattr(client, "SetBalanceMode"):
+        ret = client.SetBalanceMode(1)
+        print(f"SetBalanceMode(1) 返回: {ret}  (0 = 成功)")
+        if ret == 0:
+            print("OK: 已设置 balance_mode=1（连续步态）。可以运行 move_pulse.py。")
+        else:
+            print("WARN: 步态设置失败，移动指令可能仍被拒绝。")
+    else:
+        print("WARN: LocoClient 没有 SetBalanceMode 方法，跳过步态设置。")
+        print("直接尝试 move_pulse.py，观察是否产生步态。")
+
+if __name__ == "__main__":
+    main()

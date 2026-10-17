@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""g1_arm_base.py — G1 手臂控制的共享基类，封装 rt/arm_sdk 发布与平滑插值。"""
+import time
+import numpy as np
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_, unitree_hg_msg_dds__LowState_
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
+LEFT_ARM = [15, 16, 17, 18, 19, 20, 21]
+RIGHT_ARM = [22, 23, 24, 25, 26, 27, 28]
+ARM_ALL = LEFT_ARM + RIGHT_ARM
+K_NOT_USED = 29
+
+KP_ARM = 40.0
+KD_ARM = 1.0
+
+class G1ArmController:
+    def __init__(self, iface="eth0"):
+        ChannelFactoryInitialize(0, iface)
+        self.low_cmd = unitree_hg_msg_dds__LowCmd_()
+        self.low_state = None
+        self.first_state = False
+        self.crc = CRC()
+
+        self.pub = ChannelPublisher("rt/arm_sdk", LowCmd_)
+        self.pub.Init()
+        self.sub = ChannelSubscriber("rt/lowstate", LowState_)
+        self.sub.Init(self._lowstate_handler, 10)
+
+        t0 = time.time()
+        while not self.first_state and time.time() - t0 < 5.0:
+            time.sleep(0.1)
+        if not self.first_state:
+            raise RuntimeError("未收到 rt/lowstate，检查网卡和 DDS。")
+
+    def _lowstate_handler(self, msg):
+        self.low_state = msg
+        self.first_state = True
+
+    def _write_once(self, q_target_full):
+        cmd = self.low_cmd
+        cmd.motor_cmd[K_NOT_USED].q = 1.0  # 使能 arm_sdk（硬切）
+        cmd.motor_cmd[K_NOT_USED].kp = 0.0
+        cmd.motor_cmd[K_NOT_USED].kd = 0.0
+        cmd.motor_cmd[K_NOT_USED].tau = 0.0
+
+        for j in ARM_ALL:
+            cmd.motor_cmd[j].mode = 1
+            cmd.motor_cmd[j].q = float(q_target_full[j])
+            cmd.motor_cmd[j].dq = 0.0
+            cmd.motor_cmd[j].tau = 0.0
+            cmd.motor_cmd[j].kp = KP_ARM
+            cmd.motor_cmd[j].kd = KD_ARM
+
+        cmd.crc = self.crc.Crc(cmd)
+        self.pub.Write(cmd)
+
+    def move_to(self, target_deg: dict, duration=2.0, fps=50):
+        q_start = np.zeros(35)
+        for j in ARM_ALL:
+            q_start[j] = self.low_state.motor_state[j].q
+
+        q_target = q_start.copy()
+        for j, deg in target_deg.items():
+            q_target[j] = np.deg2rad(deg)
+
+        steps = max(1, int(duration * fps))
+        dt = 1.0 / fps
+        for i in range(steps + 1):
+            ratio = i / steps
+            q_now = q_start * (1 - ratio) + q_target * ratio
+            self._write_once(q_now)
+            time.sleep(dt)
+
+    def release(self):
+        q_now = np.zeros(35)
+        for j in ARM_ALL:
+            q_now[j] = self.low_state.motor_state[j].q
+        for _ in range(20):
+            self._write_once(q_now)
+            time.sleep(0.02)
+        cmd = self.low_cmd
+        cmd.motor_cmd[K_NOT_USED].q = 0.0
+        cmd.crc = self.crc.Crc(cmd)
+        for _ in range(10):
+            self.pub.Write(cmd)
+            time.sleep(0.02)
+
+def run_arm_action(target_deg, duration=2.0, hold=1.0, iface="eth0"):
+    ctrl = G1ArmController(iface)
+    print(f"目标: {target_deg}")
+    print(f"移动 {duration}s ...")
+    ctrl.move_to(target_deg, duration=duration)
+    print(f"保持 {hold}s ...")
+    time.sleep(hold)
+    print("释放 arm_sdk ...")
+    ctrl.release()
+    print("完成。")
