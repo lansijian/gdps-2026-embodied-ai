@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from gdps_qi.adapters.readonly.dds_readonly import parse_lowstate_motors, subscribe_dds_once
+from gdps_qi.adapters.readonly.dds_readonly import DdsReadOnlyConfig, parse_lowstate_motors, subscribe_dds_once
 from gdps_qi.adapters.readonly.joint_snapshot import JointSnapshot, JointValidity
 from gdps_qi.adapters.readonly.ros2_probe import joint_state_from_summary, probe_ros2_topic_once
 from gdps_qi.hardware.g1_joint_map import LOWSTATE_INDEX_TO_JOINT_G1_29, all_arm_joint_names
@@ -17,6 +17,7 @@ class RobotStateReadOnly:
     dog_odom_topic: str = "/dog_odom"
     lowstate_dds_topic: str = ""
     expected_dof: int = 29
+    dds_cfg: DdsReadOnlyConfig = field(default_factory=DdsReadOnlyConfig)
     status: VerificationStatus = VerificationStatus.UNKNOWN
     _snapshot: Optional[JointSnapshot] = None
     _last_probe: Dict[str, object] = field(default_factory=dict)
@@ -62,15 +63,18 @@ class RobotStateReadOnly:
                 report["lowstate_dds"] = dds
                 if dds.get("ok") and isinstance(dds.get("positions"), dict):
                     pos = dds["positions"]
-                    self._snapshot = JointSnapshot(
-                        positions={str(k): float(v) for k, v in pos.items()},
-                        stamp_sec=float(dds.get("host_received_at", 0.0)) or None,
-                        source="unitree_lowstate_dds",
-                        validity=JointValidity.PARTIAL if pos else JointValidity.UNKNOWN,
-                        mapping_basis="LOWSTATE_INDEX_TO_JOINT_G1_29",
-                        raw_joint_count=int(dds.get("motor_count", 0)),
-                    )
-                    report["snapshot_validity"] = self._snapshot.validity.value
+                    if pos and not dds.get("reject"):
+                        self._snapshot = JointSnapshot(
+                            positions={str(k): float(v) for k, v in pos.items()},
+                            stamp_sec=float(dds.get("host_received_at", 0.0)) or None,
+                            source="unitree_lowstate_dds",
+                            validity=JointValidity.PARTIAL,
+                            mapping_basis="LOWSTATE_INDEX_TO_JOINT_G1_29_documented_unverified",
+                            raw_joint_count=int(dds.get("motor_count", 0)),
+                        )
+                        report["snapshot_validity"] = self._snapshot.validity.value
+                    else:
+                        report["errors"] = [dds.get("error", "lowstate_rejected")]
             else:
                 report["missing"].append("lowstate_dds_unconfigured")
         if self.dog_odom_topic:
@@ -98,12 +102,13 @@ class RobotStateReadOnly:
                 return {"ok": False, "error": f"lowstate_idl_unavailable:{exc}"}
 
         def parser(msg: object) -> Dict[str, object]:
-            parsed = parse_lowstate_motors(msg, LOWSTATE_INDEX_TO_JOINT_G1_29)
-            if int(parsed.get("motor_count", 0)) != self.expected_dof:
-                parsed["dof_mismatch"] = True
-            return parsed
+            return parse_lowstate_motors(
+                msg, LOWSTATE_INDEX_TO_JOINT_G1_29, expected_dof=self.expected_dof
+            )
 
-        return subscribe_dds_once(self.lowstate_dds_topic, LowState_, timeout_s, parser)
+        return subscribe_dds_once(
+            self.lowstate_dds_topic, LowState_, timeout_s, parser, self.dds_cfg
+        )
 
     def get_joint_snapshot(self) -> Optional[JointSnapshot]:
         return self._snapshot

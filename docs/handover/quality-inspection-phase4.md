@@ -11,7 +11,7 @@ cd competition
 python -m pytest tests/ -q
 ```
 
-Last run: **71 passed, 3 skipped** (Pinocchio / base_pelvis tests skip without pinocchio).
+See CI/local pytest for current counts (Phase 4.1 adds field-readiness regression tests).
 
 ## Field diagnostic bundle
 

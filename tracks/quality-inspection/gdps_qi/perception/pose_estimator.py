@@ -116,12 +116,15 @@ class PoseEstimator:
     ) -> Tuple[PoseRecord, str]:
         depth_m = None
         if frame.depth_m is not None:
-            u, v = int(detection.center_uv[0]), int(detection.center_uv[1])
-            h, w = frame.depth_m.shape
-            if 0 <= u < w and 0 <= v < h:
-                depth_m = float(frame.depth_m[v, u])
-                if depth_m <= 0.05 or depth_m != depth_m:
-                    depth_m = None
+            if not frame.depth_scale_confirmed or not frame.depth_aligned_to_rgb:
+                depth_m = None
+            else:
+                u, v = int(detection.center_uv[0]), int(detection.center_uv[1])
+                h, w = frame.depth_m.shape
+                if 0 <= u < w and 0 <= v < h:
+                    depth_m = float(frame.depth_m[v, u])
+                    if depth_m <= 0.05 or depth_m != depth_m:
+                        depth_m = None
         ok, p_table, mode = self.pixel_to_table_point(
             detection.center_uv[0], detection.center_uv[1], frame, depth_m
         )
@@ -212,8 +215,12 @@ class PoseEstimator:
         frame: CameraFrame,
         depth_m: Optional[float],
     ) -> Tuple[bool, np.ndarray, str]:
+        if frame.info is None or not frame.intrinsics_trusted:
+            return False, np.zeros(3), "camera_info_missing_or_untrusted"
         info = frame.info
         if depth_m is not None and depth_m > 0.05:
+            if not frame.depth_scale_confirmed or not frame.depth_aligned_to_rgb:
+                return False, np.zeros(3), "depth_not_aligned_or_scale_unknown"
             p_cam = deproject_pixel(u, v, depth_m, info.fx, info.fy, info.cx, info.cy)
             try:
                 t_cam_table = self.tf.lookup("head_camera_optical", "table_frame", frame.stamp)

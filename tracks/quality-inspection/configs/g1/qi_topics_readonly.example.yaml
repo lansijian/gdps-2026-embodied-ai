@@ -12,10 +12,20 @@ ros2:
   dog_odom: /dog_odom
 
 unitree_dds:
+  domain_id: 0
+  network_interface: ""  # e.g. eth0 on G1 PC2 — set on site
   # Cyclone DDS topics from SDK2 / xr_teleoperate (verify on device)
   lowstate: ""           # rt/lowstate or sport mode state
   dex3_state_left: rt/lf/dex3/state
   dex3_state_right: rt/rf/dex3/state
+
+expected_body_dof: 29
+
+camera:
+  depth_scale_m: null    # meters per raw unit (e.g. 0.001 if driver uses millimeters)
+  allow_16uc1_depth: false
+  treat_mono16_as_depth: false
+  max_rgb_depth_stamp_delta_s: 0.05
 
 teleimager:
   enabled: false

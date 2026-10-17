@@ -33,6 +33,7 @@ export PYTHONPATH=$PWD/tracks/quality-inspection:$PYTHONPATH
 # 4) 复制并编辑 Topic 配置
 cp tracks/quality-inspection/configs/g1/qi_topics_readonly.example.yaml /tmp/qi_topics.yaml
 # 人工填入实测 rgb / joint_states / lowstate / dex3 topics
+# 必填：unitree_dds.network_interface（如 eth0）、camera.depth_scale_m（若用 16UC1 深度）
 
 # 5) 干跑 schema（不订阅）
 python3 scripts/g1/qi_hardware_diagnostics.py --config /tmp/qi_topics.yaml

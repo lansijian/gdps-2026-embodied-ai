@@ -34,7 +34,13 @@ class CameraFrame:
     rgb: Optional[np.ndarray]
     depth_m: Optional[np.ndarray]
     stamp: float
-    info: CameraInfo
+    info: Optional[CameraInfo]
+    host_received_at: float = 0.0
+    rgb_frame_id: str = ""
+    depth_frame_id: str = ""
+    depth_scale_confirmed: bool = False
+    depth_aligned_to_rgb: bool = False
+    intrinsics_trusted: bool = False
 
 
 @dataclass
@@ -67,8 +73,16 @@ class CameraAdapter:
             raise ValueError("rgb shape mismatch")
         if depth_m is not None and depth_m.shape != rgb.shape[:2]:
             raise ValueError("depth shape mismatch")
+        now = time.time()
         self._frame = CameraFrame(
-            rgb=rgb, depth_m=depth_m, stamp=time.time(), info=self._info
+            rgb=rgb,
+            depth_m=depth_m,
+            stamp=now,
+            info=self._info,
+            host_received_at=now,
+            intrinsics_trusted=self._info.fx > 0 and self._info.fy > 0,
+            depth_scale_confirmed=depth_m is not None,
+            depth_aligned_to_rgb=depth_m is not None,
         )
 
     def grab(self, max_age_s: float = 0.5) -> Optional[CameraFrame]:

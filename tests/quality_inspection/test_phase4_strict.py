@@ -103,6 +103,7 @@ class Phase4StrictTests(unittest.TestCase):
             depth_m=None,
             stamp=1.0,
             info=CameraInfo(640, 480, 600, 600, 320, 240),
+            intrinsics_trusted=False,
         )
         tf.set_transform("head_camera_optical", "table_frame", np.eye(4), 1.0, "sim", static=False)
         tf.set_transform("robot_center", "table_frame", np.eye(4), 1.0, "sim", static=False)
