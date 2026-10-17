@@ -1,0 +1,14 @@
+calibration_id: field_workstation_v0
+robot_variant: G1_EDU_UNKNOWN_DOF
+calibrated: false
+created_at: 0.0
+notes: "Set calibrated true only after on-site measurement. Do not commit real secrets."
+transforms:
+  robot_center->table_frame:
+    position: [0.45, 0.0, 0.75]
+    orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    static: false
+  table_frame->scale_frame:
+    position: [0.25, -0.15, 0.0]
+    orientation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    static: true
