@@ -25,4 +25,3 @@ livox_frame: UNVERIFIED  # confirm from point cloud header.frame_id
 cmd_vel_topic: /cmd_vel
 sport_request_topic: /api/sport/request   # CONFIRMED present; API ID/permission UNVERIFIED
 workspace_on_robot: /home/unitree/gdps-2026-embodied-ai
-

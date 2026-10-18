@@ -12,4 +12,3 @@ nav_status: /gdps/nav_status
 enable_live: /gdps/enable_live   # must stay unused until Phase 5 authorization
 heartbeat: /gdps/host_heartbeat
 manual_stop: /gdps/manual_stop
-
