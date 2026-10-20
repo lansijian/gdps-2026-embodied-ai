@@ -12,12 +12,18 @@ if [[ "$CI_MODE" != --ci ]]; then
     INPUT=$MID360_CONFIG_SOURCE
   else
     mapfile -t FOUND < <(find "$OLD" -type f -name MID360_config.json | sort)
-    if [[ ${#FOUND[@]} -ne 1 ]]; then
-      printf 'Found %s MID360_config.json files in %s. Set MID360_CONFIG_SOURCE to the actual working file.\n' "${#FOUND[@]}" "$OLD" >&2
-      printf '%s\n' "${FOUND[@]}" >&2
+    if [[ ${#FOUND[@]} -eq 0 ]]; then
+      printf 'No MID360_config.json under %s. Set MID360_CONFIG_SOURCE to the working file.\n' "$OLD" >&2
       exit 1
     fi
     INPUT=${FOUND[0]}
+    for candidate in "${FOUND[@]}"; do
+      if ! cmp -s -- "$INPUT" "$candidate"; then
+      printf 'Found %s MID360_config.json files in %s. Set MID360_CONFIG_SOURCE to the actual working file.\n' "${#FOUND[@]}" "$OLD" >&2
+      printf '%s\n' "${FOUND[@]}" >&2
+      exit 1
+      fi
+    done
   fi
   cp -- "$INPUT" "$ROOT/src/g1_nav_bringup/config/mid360_config.json"
   cmp -- "$INPUT" "$ROOT/src/g1_nav_bringup/config/mid360_config.json"
@@ -31,7 +37,16 @@ export DEBIAN_FRONTEND=noninteractive
 "${SUDO[@]}" apt-get install -y git cmake build-essential pkg-config libssl-dev libasio-dev \
   libtinyxml2-dev libpcl-dev python3-pip python3-colcon-common-extensions python3-rosdep \
   ros-foxy-navigation2 ros-foxy-nav2-bringup ros-foxy-slam-toolbox \
-  ros-foxy-pointcloud-to-laserscan ros-foxy-rmw-cyclonedds-cpp ros-foxy-sensor-msgs-py
+  ros-foxy-pointcloud-to-laserscan ros-foxy-rmw-cyclonedds-cpp ros-foxy-sensor-msgs-py \
+  ros-foxy-pcl-conversions ros-foxy-rviz2
+if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+  "${SUDO[@]}" rosdep init
+fi
+rosdep update --rosdistro foxy --include-eol-distros
+# SDK is already installed on G1 and is never imported by the default dry run.
+# Livox has no Foxy apt package; it is compiled below from the official sources.
+rosdep install --from-paths "$ROOT/src" --ignore-src -y --rosdistro foxy \
+  --skip-keys 'unitree_sdk2py livox_ros_driver2'
 
 fetch() {
   local repository=$1 revision=$2 destination=$3

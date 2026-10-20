@@ -40,7 +40,14 @@ jobs:
           source install/setup.bash
           mkdir -p evidence
           set +e
-          timeout --signal=INT 15 ros2 launch g1_nav_bringup mapping.launch.py > evidence/no-hardware.log 2>&1
+          timeout --signal=INT 18 ros2 launch g1_nav_bringup mapping.launch.py > evidence/no-hardware.log 2>&1 &
+          launch_pid=$!
+          sleep 10
+          ros2 node list > evidence/no-hardware-nodes.txt
+          for node in /slam_toolbox /odom_bridge /pointcloud_to_laserscan /lidar_extrinsics; do
+            grep -Fx "$node" evidence/no-hardware-nodes.txt || exit 1
+          done
+          wait "$launch_pid"
           result=$?
           set -e
           test "$result" -eq 124

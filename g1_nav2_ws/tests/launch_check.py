@@ -39,6 +39,9 @@ def main():
         scans.append(msg)
     node.create_subscription(LaserScan, '/scan', on_scan, qos_profile_sensor_data)
     node.create_subscription(OccupancyGrid, '/map', lambda msg: seen.update(map=seen['map'] + 1), 10)
+    moving_commands = []
+    node.create_subscription(Twist, '/cmd_vel', lambda msg: moving_commands.append(msg)
+                             if abs(msg.linear.x) + abs(msg.angular.z) > 0 else None, 10)
     buffer = Buffer()
     listener = TransformListener(buffer, node)
     action = ActionClient(node, NavigateToPose, '/navigate_to_pose')
@@ -58,11 +61,19 @@ def main():
     node.create_timer(0.02, publish)
     try:
         start = time.monotonic()
+        goal_future = None
         while time.monotonic() - start < 75:
             rclpy.spin_once(node, timeout_sec=0.05)
             if process.poll() is not None:
                 raise AssertionError('Launch exited early; inspect launch.log')
-            if seen['scan'] >= 30 and seen['map'] >= 1 and action.server_is_ready():
+            if seen['scan'] >= 30 and seen['map'] >= 1 and action.server_is_ready() and goal_future is None:
+                goal = NavigateToPose.Goal()
+                goal.pose.header.frame_id = 'map'
+                goal.pose.header.stamp = node.get_clock().now().to_msg()
+                goal.pose.pose.position.x = 1.0
+                goal.pose.pose.orientation.w = 1.0
+                goal_future = action.send_goal_async(goal)
+            if moving_commands and goal_future is not None and goal_future.done() and goal_future.result().accepted:
                 required = {'slam_toolbox', 'odom_bridge', 'pointcloud_to_laserscan', 'cmd_vel_bridge',
                             'controller_server', 'planner_server', 'bt_navigator'}
                 assert required <= set(node.get_node_names()), node.get_node_names()
@@ -70,11 +81,14 @@ def main():
                 assert any(any(math.isfinite(v) for v in scan.ranges) for scan in scans)
                 for parent, child in [('map', 'odom'), ('odom', 'base_link'), ('base_link', 'livox_frame')]:
                     assert buffer.can_transform(parent, child, rclpy.time.Time()), (parent, child)
-                print('PASS synthetic cloud -> scan -> SLAM map -> Nav2 action; counts={}'.format(seen))
+                print('PASS synthetic cloud -> scan -> SLAM map -> accepted Nav2 goal -> cmd_vel; counts={}, commands={}'.format(seen, len(moving_commands)))
                 return
         raise AssertionError('No complete synthetic flow after 75s: {}'.format(seen))
     finally:
-        os.killpg(process.pid, signal.SIGINT)
+        try:
+            os.killpg(process.pid, signal.SIGINT)
+        except ProcessLookupError:
+            pass
         try:
             process.wait(timeout=20)
         except subprocess.TimeoutExpired:

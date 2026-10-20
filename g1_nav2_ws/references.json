@@ -18,5 +18,23 @@
   "unitree": {
     "repo": "unitreerobotics/unitree_sdk2_python",
     "commit": "814556d15970dd2ecf1c9984e845ca02ab07e206"
+  },
+  "nav2": {
+    "repo": "ros-navigation/navigation2",
+    "commit": "0c9917ffc3cd53175a066b87659ea3920e3a4f20"
+  },
+  "slam_toolbox": {
+    "repo": "SteveMacenski/slam_toolbox",
+    "commit": "4786e90c06a4dc6fa811c5057d4e88387fba3829"
+  },
+  "pointcloud_to_laserscan": {
+    "repo": "ros-perception/pointcloud_to_laserscan",
+    "branch": "foxy",
+    "deployment": "ROS Foxy apt package"
+  },
+  "supplied_bridge": {
+    "file": "unitree_g1_ros2-main.zip",
+    "sha256": "1d09f2b5667949a31a84f212692f12f86356c1ab3ecb6e526df28661d16bdd19",
+    "source": "src/g1_ros2_bridge/g1_ros2_bridge/odom_bridge.py"
   }
 }
