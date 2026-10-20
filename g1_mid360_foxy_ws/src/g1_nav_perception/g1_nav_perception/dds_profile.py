@@ -19,8 +19,21 @@ def prepare(path,cap=None,output=None):
     if element is None:return report
     requested=bytes_value(element.text);report['requested_receive_minimum_bytes']=requested
     if cap is None:
-        try:cap=int(Path('/proc/sys/net/core/rmem_max').read_text())
-        except (OSError,ValueError):cap=None
+        try:
+            cap=int(Path('/proc/sys/net/core/rmem_max').read_text())
+            report['cap_source']='proc_rmem_max'
+        except (OSError,ValueError):
+            # Some containers hide /proc/sys/net/core/rmem_max. Probe only a new,
+            # unbound socket; changing its buffer does not change host sysctls.
+            try:
+                import socket
+                with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as probe:
+                    probe.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,requested)
+                    observed=probe.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
+                cap=max(1,observed//2)  # Linux reports twice the userspace requested buffer.
+                report.update(cap_source='unbound_socket_probe',observed_so_rcvbuf_bytes=observed)
+            except OSError:
+                cap=None;report['cap_source']='unavailable'
     report['kernel_rmem_max_bytes']=cap
     if cap is not None and 0<cap<requested:
         applied=max(1,cap)
