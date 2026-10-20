@@ -205,12 +205,20 @@ class Pipeline(Node):
         if self.scan_ratio < self.site['diagnostics']['minimum_scan_finite_ratio']:
             reasons.append('SCAN_INVALID_RATIO')
         stats = {k: v.report() for k, v in self.streams.items()}
+        map_ready = False
+        try:
+            map_tf = self.buffer.lookup_transform('map', 'odom', Time())
+            map_age = time.time()-stamp_seconds(map_tf.header.stamp)
+            map_ready = -.2 <= map_age <= .3 and 'odom' in self.edges and self.edges['odom'][0] == 'map'
+        except Exception:
+            pass
         radius = max((math.hypot(*p) for p in (self.site['robot']['footprint'] or [])), default=1.)
         l = self.site['limits']
         stop_distance = radius+.2+l['vx']*.4+l['vx']**2/(2*l['accel_x'])
         clear = self.clearance > stop_distance
         payload = {'schema_version': 1, 'data_source': self.site['data_source'],
                    'healthy': not reasons, 'reasons': sorted(set(reasons)),
+                   'map_ready': map_ready,
                    'realtime': time.time(), 'uptime_s': now-self.started,
                    'streams': stats, 'scan_finite_ratio': self.scan_ratio,
                    'clearance_m': self.clearance, 'stop_distance_m': stop_distance,

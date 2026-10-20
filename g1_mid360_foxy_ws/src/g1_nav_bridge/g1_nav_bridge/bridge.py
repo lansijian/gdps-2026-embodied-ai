@@ -45,7 +45,8 @@ class Bridge(Node):
         h = self.health or {}
         fresh = self.health_received is not None and now-self.health_received <= .3
         unique = self.count_publishers('/g1_nav/health') == 1 and self.count_publishers('/cmd_vel') == 1
-        ready = fresh and unique and h.get('healthy') is True and h.get('obstacle_stop') is False
+        ready = (fresh and unique and h.get('healthy') is True and h.get('obstacle_stop') is False
+                 and h.get('map_ready') is True)
         reason = 'OBSTACLE_STOP' if h.get('obstacle_stop') else 'HEALTH_TIMEOUT_OR_INHIBIT'
         vx, vy, wz = self.gate.tick(now, ready, reason)
         m = Twist(); m.linear.x, m.linear.y, m.angular.z = vx, vy, wz

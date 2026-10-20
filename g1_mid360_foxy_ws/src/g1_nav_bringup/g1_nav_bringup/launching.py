@@ -18,11 +18,14 @@ def share(name, *parts):
     return str(Path(get_package_share_directory(name)).joinpath(*parts))
 
 
-def check_map(path):
+def check_map(path, data_source='REAL_SENSOR'):
     p = Path(path)
     if not path or not p.is_file():
         raise Blocked('MAP_MISSING: provide a real saved occupancy map YAML')
     m = yaml.safe_load(p.read_text())
+    if m.get('gdps_data_source', 'REAL_SENSOR') != 'REAL_SENSOR' and (
+            data_source == 'REAL_SENSOR' or os.environ.get('G1_NAV_TEST_ONLY') != '1'):
+        raise Blocked('SYNTHETIC_MAP_FORBIDDEN_FOR_REAL_SENSOR')
     image = Path(m['image'])
     if not image.is_absolute():
         image = p.parent/image
@@ -42,7 +45,7 @@ def configure(context):
     validate_site(site, full=mode != 'sensor_check')
     if mode != 'sensor_check' and site['data_source'] != 'REAL_SENSOR' and os.environ.get('G1_NAV_TEST_ONLY') != '1':
         raise Blocked('non-real data requires isolated G1_NAV_TEST_ONLY=1')
-    map_path = check_map(LaunchConfiguration('map').perform(context)) if mode in ('localization', 'dry_run') else ''
+    map_path = check_map(LaunchConfiguration('map').perform(context), site['data_source']) if mode in ('localization', 'dry_run') else ''
     parameters = [{'use_sim_time': False, 'site': str(Path(site_path).resolve())}]
     actions = [Node(package='g1_nav_perception', executable='pipeline', output='screen', parameters=parameters),
                Node(package='g1_nav_tf_authority', executable='tf_authority', output='screen', parameters=[{'use_sim_time': False}])]

@@ -3,6 +3,7 @@ import argparse
 import ast
 import hashlib
 import importlib.util
+import importlib.metadata
 import json
 from pathlib import Path
 
@@ -16,9 +17,15 @@ else:
     path = root/'g1/loco/g1_loco_client.py'
     data = path.read_bytes(); tree = ast.parse(data)
     report.update(status='SOURCE_AUDITED_ONLY', path=str(path), sha256=hashlib.sha256(data).hexdigest(),
-                  signatures={n.name: [a.arg for a in n.args.args] for n in ast.walk(tree)
+                  signatures={n.name: {'args': [a.arg for a in n.args.args],
+                                       'defaults_ast': [ast.dump(d) for d in n.args.defaults],
+                                       'keyword_only': [a.arg for a in n.args.kwonlyargs]}
+                              for n in ast.walk(tree)
                               if isinstance(n, ast.FunctionDef) and n.name in
                               ('SetVelocity', 'Move', 'StopMove', 'GetFsmId', 'SetFsmId')})
+    report['installed_distributions'] = [{'name': d.metadata['Name'], 'version': d.version}
+                                       for d in importlib.metadata.distributions()
+                                       if 'unitree' in d.metadata.get('Name', '').lower()]
 out = Path(args.output); out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(report, indent=2))
 print(json.dumps(report, indent=2))

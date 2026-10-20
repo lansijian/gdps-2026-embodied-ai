@@ -1,0 +1,10 @@
+free_thresh: 0.25
+gdps_data_source: SYNTHETIC_TEST
+image: SYNTHETIC_TEST_room.pgm
+negate: 0
+occupied_thresh: 0.65
+origin:
+- -4.0
+- -4.0
+- 0.0
+resolution: 0.1
