@@ -1,0 +1,8 @@
+external/
+logs/
+build/
+install/
+log/
+site.yaml
+*.zip
+__pycache__/

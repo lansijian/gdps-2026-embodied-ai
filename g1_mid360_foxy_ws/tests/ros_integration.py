@@ -1,0 +1,134 @@
+"""Executable Foxy integration acceptance in isolated ROS_DOMAIN_ID.
+
+Creates only explicitly labelled synthetic map and sensor fixtures. No robot claim.
+"""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import yaml
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
+from rclpy.action import ActionClient
+from nav_msgs.msg import OccupancyGrid, Path as NavPath
+from nav2_msgs.action import ComputePathToPose, NavigateToPose
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from std_msgs.msg import String
+from slam_toolbox.srv import SerializePoseGraph
+
+ROOT=Path(__file__).resolve().parents[1]
+OUT=ROOT/'logs/ros-integration';OUT.mkdir(parents=True,exist_ok=True)
+if os.environ.get('G1_NAV_TEST_ONLY')!='1' or os.environ.get('ROS_DOMAIN_ID')!='87':
+    raise SystemExit('Requires isolated SYNTHETIC_TEST G1_NAV_TEST_ONLY=1 ROS_DOMAIN_ID=87')
+site=yaml.safe_load((ROOT/'src/g1_nav_config/config/site.example.yaml').read_text())
+site['data_source']='SYNTHETIC_TEST'
+for key in ('calibration','timing','filter'):site[key].update(verified=True,evidence_id='SYNTHETIC_TEST_ONLY_NOT_HARDWARE')
+site['calibration'].update(translation_xyz=[0.,0.,0.],quaternion_xyzw=[0.,0.,0.,1.])
+site['filter'].update(min_height=.1,max_height=1.5,scan_time=.1)
+site['robot'].update(footprint_verified=True,safe_environment_confirmed=True,blind_spots_reviewed=True,
+    footprint=[[-.25,-.2],[.25,-.2],[.25,.2],[-.25,.2]])
+site_path=OUT/'synthetic-site.yaml';site_path.write_text(yaml.safe_dump(site))
+fault=OUT/'fault.txt';fault.write_text('')
+processes=[]; files=[]
+def start(label,cmd):
+    f=open(OUT/(label+'.log'),'w');files.append(f)
+    p=subprocess.Popen(cmd,stdout=f,stderr=subprocess.STDOUT,start_new_session=True)
+    processes.append(p);return p
+def stop(p):
+    if p.poll() is None:
+        os.killpg(p.pid,signal.SIGINT)
+        try:p.wait(15)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid,signal.SIGTERM);p.wait(10)
+def launch(mode,map_path=None):
+    cmd=['ros2','launch','g1_nav_bringup',mode+'.launch.py','site:='+str(site_path)]
+    if map_path:cmd+=['map:='+str(map_path)]
+    return start(mode,cmd)
+rclpy.init();node=Node('SYNTHETIC_TEST_acceptance')
+latest={};counts={}
+def receive(key):
+    def callback(msg):latest[key]=msg;counts[key]=counts.get(key,0)+1
+    return callback
+node.create_subscription(String,'/g1_nav/health',receive('health'),10)
+node.create_subscription(String,'/g1_nav/command_observer',receive('observer'),10)
+node.create_subscription(Twist,'/g1_nav/cmd_vel_safe',receive('safe'),10)
+node.create_subscription(Twist,'/cmd_vel',receive('cmd'),10)
+node.create_subscription(NavPath,'/plan',receive('path'),10)
+node.create_subscription(OccupancyGrid,'/local_costmap/costmap',receive('costmap'),10)
+node.create_subscription(OccupancyGrid,'/map',receive('map'),QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
+def wait(predicate,timeout=30):
+    end=time.monotonic()+timeout
+    while time.monotonic()<end:
+        rclpy.spin_once(node,timeout_sec=.05)
+        if predicate():return
+    raise AssertionError('timeout; counts='+str(counts)+' health='+str(getattr(latest.get('health'),'data','MISSING')))
+def health():return json.loads(latest['health'].data) if 'health' in latest else {}
+results=[]
+def passed(label):
+    results.append({'test':label,'status':'PASS','data_source':'SYNTHETIC_TEST'});print('PASS',label,flush=True)
+try:
+    fixture=start('fixture',[sys.executable,str(ROOT/'tests/ros_fixture.py'),str(fault)])
+    mapping=launch('mapping')
+    wait(lambda: health().get('healthy') is True,30);passed('source_scan_tf_health')
+    wait(lambda:'map' in latest and latest['map'].width>0 and any(x>=0 for x in latest['map'].data),100)
+    passed('slam_toolbox_nonempty_map')
+    subprocess.run(['ros2','run','nav2_map_server','map_saver_cli','-f',str(OUT/'synthetic-map'),
+                    '--ros-args','-p','save_map_timeout:=10.0'],check=True,timeout=25)
+    assert (OUT/'synthetic-map.yaml').is_file();passed('occupancy_map_saved')
+    client=node.create_client(SerializePoseGraph,'/slam_toolbox/serialize_map')
+    assert client.wait_for_service(timeout_sec=10)
+    req=SerializePoseGraph.Request();req.filename=str(OUT/'synthetic-posegraph')
+    future=client.call_async(req);wait(lambda:future.done(),20)
+    assert (OUT/'synthetic-posegraph.posegraph').is_file();passed('posegraph_saved')
+    stop(mapping)
+    latest.clear();counts.clear()
+    nav=launch('navigation_dryrun',OUT/'synthetic-map.yaml')
+    wait(lambda:health().get('healthy') is True,30)
+    pose_pub=node.create_publisher(PoseWithCovarianceStamped,'/initialpose',10)
+    # This initial pose belongs only to the synthetic room fixture.
+    until=time.monotonic()+65
+    while time.monotonic()<until:
+        p=PoseWithCovarianceStamped();p.header.frame_id='map';p.header.stamp=node.get_clock().now().to_msg()
+        p.pose.pose.orientation.w=1.;p.pose.covariance[0]=.01;p.pose.covariance[7]=.01;p.pose.covariance[35]=.01
+        pose_pub.publish(p);rclpy.spin_once(node,timeout_sec=.2)
+        if 'costmap' in latest:break
+    wait(lambda:'costmap' in latest,45);passed('map_reloaded_amcl_and_costmap_active')
+    planner=ActionClient(node,ComputePathToPose,'/compute_path_to_pose')
+    assert planner.wait_for_server(timeout_sec=30)
+    goal=ComputePathToPose.Goal();goal.goal.header.frame_id='map';goal.goal.header.stamp=node.get_clock().now().to_msg()
+    goal.goal.pose.position.x=1.;goal.goal.pose.orientation.w=1.;goal.planner_id='GridBased'
+    sent=planner.send_goal_async(goal);wait(lambda:sent.done(),15)
+    assert sent.result().accepted
+    result=sent.result().get_result_async();wait(lambda:result.done(),30)
+    assert len(result.result().result.path.poses)>2;passed('navfn_real_action_nonempty_path')
+    navigator=ActionClient(node,NavigateToPose,'/navigate_to_pose');assert navigator.wait_for_server(timeout_sec=10)
+    ng=NavigateToPose.Goal();ng.pose=goal.goal
+    nf=navigator.send_goal_async(ng);wait(lambda:nf.done(),10);assert nf.result().accepted
+    wait(lambda:'cmd' in latest and abs(latest['cmd'].linear.x)>0,30);passed('dwb_generates_cmd_vel_without_sdk')
+    wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')
+    for injected in ('dynamic_obstacle','cloud_loss','odom_loss','stale_time','future_time','wrong_frame'):
+        fault.write_text(injected)
+        wait(lambda:'safe' in latest and latest['safe'].linear.x==0. and
+            ('OBSTACLE' in json.loads(latest['observer'].data)['reason'] or health().get('healthy') is False),10)
+        assert json.loads(latest['observer'].data)['sdk_write_calls']==0
+        passed('fault_stop_'+injected)
+        if injected=='dynamic_obstacle':
+            def obstacle_in_costmap():
+                m=latest.get('costmap')
+                if m is None:return False
+                x=int((.45-m.info.origin.position.x)/m.info.resolution)
+                y=int((0.-m.info.origin.position.y)/m.info.resolution)
+                return 0<=x<m.info.width and 0<=y<m.info.height and m.data[y*m.info.width+x]>=90
+            wait(obstacle_in_costmap,10);passed('dynamic_obstacle_marked_in_local_costmap')
+        fault.write_text('');wait(lambda:health().get('healthy') is True,15)
+    nf.result().cancel_goal_async()
+    passed('sdk_write_count_zero_all_ros_phases')
+finally:
+    (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
+    for process in reversed(processes):stop(process)
+    node.destroy_node();rclpy.shutdown()
+    for f in files:f.close()

@@ -1,0 +1,53 @@
+schema_version: 1
+data_source: REAL_SENSOR
+calibration:
+  verified: false
+  evidence_id: ''
+  translation_xyz:
+  - null
+  - null
+  - null
+  quaternion_xyzw:
+  - null
+  - null
+  - null
+  - null
+timing:
+  verified: false
+  evidence_id: ''
+  strategy: preserve
+  max_age_s: 0.3
+  max_future_s: 0.03
+  jump_s: 0.2
+filter:
+  verified: false
+  evidence_id: ''
+  min_height: null
+  max_height: null
+  scan_time: null
+  range_min: 0.15
+  range_max: 8.0
+  angle_increment: 0.008726646
+robot:
+  footprint_verified: false
+  footprint: null
+  safe_environment_confirmed: false
+  blind_spots_reviewed: false
+limits:
+  vx: 0.1
+  vy: 0.0
+  wz: 0.15
+  accel_x: 0.05
+  accel_wz: 0.1
+  command_timeout_s: 0.25
+live:
+  allow_live: false
+  dry_run: true
+tf:
+  odom_owner: project
+  livox_owner: project
+diagnostics:
+  window_s: 30.0
+  minimum_cloud_hz: 7.0
+  minimum_odom_hz: 20.0
+  minimum_scan_finite_ratio: 0.01

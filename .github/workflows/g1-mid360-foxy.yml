@@ -1,0 +1,53 @@
+name: G1 MID360 Foxy dry-run
+on:
+  push:
+    branches: [codex/g1-mid360-foxy-dryrun-20261020]
+  pull_request:
+    paths: ['g1_mid360_foxy_ws/**', '.github/workflows/g1-mid360-foxy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  foxy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    container: ros:foxy-ros-base-focal
+    env:
+      ROS_DOMAIN_ID: '87'
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      G1_NAV_TEST_ONLY: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Foxy test dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-pytest python3-yaml python3-colcon-common-extensions ros-foxy-rmw-cyclonedds-cpp ros-foxy-navigation2 ros-foxy-nav2-bringup ros-foxy-slam-toolbox ros-foxy-pointcloud-to-laserscan ros-foxy-diagnostic-msgs
+      - name: Contract tests and colcon build on Python 3.8
+        run: |
+          source /opt/ros/foxy/setup.bash
+          cd g1_mid360_foxy_ws
+          mkdir -p logs
+          python3 -m pytest tests/test_contracts.py -q --junitxml=logs/contracts.xml
+          colcon list --base-paths src
+          colcon build --base-paths src --executor sequential --event-handlers console_direct+
+          source install/setup.bash
+          for mode in sensor_check mapping localization navigation_dryrun g1_nav_bringup; do
+            ros2 launch g1_nav_bringup "$mode.launch.py" --show-args
+          done
+          dpkg-query -W 'ros-foxy-*' > logs/foxy-versions.txt
+      - name: ROS sensor SLAM localization Nav2 fault-injection integration
+        run: |
+          source /opt/ros/foxy/setup.bash
+          cd g1_mid360_foxy_ws
+          source install/setup.bash
+          python3 tests/ros_integration.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: foxy-synthetic-evidence
+          path: |
+            g1_mid360_foxy_ws/logs/
+            g1_mid360_foxy_ws/log/

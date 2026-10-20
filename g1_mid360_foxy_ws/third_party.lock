@@ -1,0 +1,29 @@
+{
+  "zip": {
+    "sha256": "1d09f2b5667949a31a84f212692f12f86356c1ab3ecb6e526df28661d16bdd19",
+    "upstream": "https://github.com/SimonR99/unitree_g1_ros2",
+    "upstream_observed_main": "6ce74366553cca3dc7d8f5b46f155ed66d11f384",
+    "zip_commit": "UNVERIFIED",
+    "license": "BSD-3-Clause declared in package.xml; standalone LICENSE absent",
+    "reused": {
+      "src/g1_ros2_bridge/g1_ros2_bridge/joint_names.py": "7fecebe7b64dc32c19e47da446cebf9c8a223dac86f4f70355678b92f9b0e05e"
+    }
+  },
+  "sources": {
+    "navigation2": {
+      "url": "https://github.com/ros-navigation/navigation2.git",
+      "version": "0c9917ffc3cd53175a066b87659ea3920e3a4f20",
+      "branch": "foxy-devel"
+    },
+    "slam_toolbox": {
+      "url": "https://github.com/SteveMacenski/slam_toolbox.git",
+      "version": "4786e90c06a4dc6fa811c5057d4e88387fba3829",
+      "branch": "foxy-devel"
+    },
+    "pointcloud_to_laserscan": {
+      "url": "https://github.com/ros-perception/pointcloud_to_laserscan.git",
+      "version": "21c8973506b559fbeaf662b181b8a0d2f0955658",
+      "branch": "foxy"
+    }
+  }
+}
