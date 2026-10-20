@@ -96,7 +96,8 @@ def configure(context):
     downstream = []
     if mode == 'mapping':
         downstream.append(Node(package='slam_toolbox', executable='async_slam_toolbox_node',
-            name='slam_toolbox', output='screen', parameters=[share('g1_nav_config', 'config', 'slam.yaml'), {'use_sim_time': False}]))
+            name='slam_toolbox', output='screen', parameters=[share('g1_nav_config', 'config', 'slam.yaml'),
+                {'use_sim_time': False, 'max_laser_range': float(site['filter']['range_max'])}]))
     else:
         for pkg, exe, name in (('nav2_map_server', 'map_server', 'map_server'), ('nav2_amcl', 'amcl', 'amcl')):
             downstream.append(Node(package=pkg, executable=exe, name=name, output='screen', parameters=[generated]))
