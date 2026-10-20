@@ -40,6 +40,7 @@ def generate_launch_description():
         DeclareLaunchArgument('dry_run', default_value='true'),
         DeclareLaunchArgument('autostart', default_value='true'),
         DeclareLaunchArgument('params_file', default_value=os.path.join(share, 'config', 'nav2_params.yaml')),
+        DeclareLaunchArgument('bridge_params_file', default_value=os.path.join(share, 'config', 'bridge.yaml')),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(share, 'launch', 'mapping.launch.py')),
                                  condition=IfCondition(LaunchConfiguration('slam'))),
         saved,
@@ -47,4 +48,7 @@ def generate_launch_description():
                                  launch_arguments={'params_file': params, 'use_sim_time': 'false',
                                                    'autostart': LaunchConfiguration('autostart')}.items()),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(
-            get_package_share_directory('cmd_vel_bridge'), 'launch', 'bridge.launch.py')))])
+            get_package_share_directory('cmd_vel_bridge'), 'launch', 'bridge.launch.py')),
+            launch_arguments={'bridge_params_file': LaunchConfiguration('bridge_params_file'),
+                              'dry_run': LaunchConfiguration('dry_run'),
+                              'interface': LaunchConfiguration('interface')}.items())])
