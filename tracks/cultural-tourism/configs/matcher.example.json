@@ -1,0 +1,36 @@
+{
+  "matcher": {
+    "method": "sift",
+    "max_side": 1200,
+    "max_features": 1500,
+    "ratio_test": 0.7,
+    "ransac_reproj_px": 5.0,
+    "min_inliers": 20,
+    "min_inlier_ratio": 0.4,
+    "min_confidence": 0.5,
+    "min_margin": 0.15,
+    "confidence_full_inliers": 120.0,
+    "confidence_full_ratio": 0.6,
+    "confidence_full_margin": 0.5,
+    "top_k": 3,
+    "prefilter": "orb",
+    "prefilter_top_k": 3,
+    "dedupe": true
+  },
+  "temporal": {
+    "window_s": 1.0,
+    "min_vote_ratio": 0.6,
+    "hold_s": 1.6,
+    "assumed_match_rate": 0.0
+  },
+  "video": {
+    "match_every": 2,
+    "output_fps": 0.0
+  },
+  "camera": {
+    "index": 0,
+    "width": 1280,
+    "height": 720,
+    "backend": "dshow"
+  }
+}

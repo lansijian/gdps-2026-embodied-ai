@@ -1,0 +1,48 @@
+# =============================================================================
+# GDPS 2026 文旅赛道 · 摄像头展品识别导览
+# Ubuntu 20.04 LTS（Python 3.8.10）依赖清单
+#
+# 适用：
+#   * x86_64 Ubuntu 20.04：python3 -m venv .venv && .venv/bin/pip install -r tracks/cultural-tourism/requirements-linux.txt
+#   * 宇树 G1 / Jetson Orin NX (aarch64, JetPack 5)：推荐直接用 sudo apt install python3-opencv
+#     （L4T 源提供 OpenCV 4.5.4，含 SIFT；aarch64 没有 pip 预编译 wheel，源码编译很慢）
+#     详见 docs/deployment/2026-10-20-tourism-camera-ubuntu-g1.md 的安装章节。
+#
+# 版本约束原因：
+#   * Ubuntu 20.04 默认 Python 3.8；numpy 2.x 只支持 Python 3.9+，所以必须 numpy<2
+#   * OpenCV 4.4 起 SIFT 进入主模块，不需要 opencv-contrib-python
+#   * opencv-python（非 headless）导入时需要 libGL.so.1；G1 这类无显示器的机器会报
+#     ImportError: libGL.so.1: cannot open shared object file
+#     -> 无显示器请用下方的“方案 B：headless”
+#   * Pillow 用于 HUD 中文展品名渲染；PyYAML 仅在 --config 读 .yaml 时需要
+#     （没有 PyYAML 时会自动回退读取同名 .json）
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 方案 A：有显示器 / 需要 cv2.imshow 预览窗口（x86_64 桌面 Ubuntu 20.04）
+# ---------------------------------------------------------------------------
+opencv-python==4.8.1.78
+
+# ---------------------------------------------------------------------------
+# 方案 B：无显示器（SSH / systemd / 宇树 G1 默认场景）：把方案 A 那行注释掉，
+# 启用下面这行。opencv-python-headless 不依赖 libGL，但没有 imshow；
+# 程序检测不到 DISPLAY 时会自动降级 headless，不影响匹配与 JSON 输出。
+# ---------------------------------------------------------------------------
+# opencv-python-headless==4.8.1.78
+
+# 最后一个支持 Python 3.8 的 numpy 1.x（1.25 起要求 Python >=3.9）
+numpy==1.24.4
+
+# HUD 中文名渲染（overlay.py 使用 Pillow + 系统 CJK 字体）
+Pillow==9.5.0
+
+# 读取 --config 的 YAML 配置（不需要可删；JSON 配置无需 PyYAML）
+PyYAML==6.0.1
+
+# ---------------------------------------------------------------------------
+# 可选：Intel RealSense 相机（启动参数 --backend realsense）
+#   * x86_64 一般有 PyPI wheel：pip install pyrealsense2
+#   * aarch64 (Orin NX) 通常没有 PyPI wheel，改用 Intel 官方 apt 源安装
+#     librealsense2-utils / python3-pyrealsense2，或从源码编译 librealsense
+# ---------------------------------------------------------------------------
+# pyrealsense2==2.54.2.5688
