@@ -52,6 +52,7 @@ class Bridge(Node):
         m = Twist(); m.linear.x, m.linear.y, m.angular.z = vx, vy, wz
         self.safe.publish(m)
         s = String(); s.data = json.dumps({'live': 'DISABLED', 'sdk_write_calls': 0,
+            'health_age_s': now-self.health_received if self.health_received is not None else None,
             'reason': self.gate.reason, 'safe_preview': [vx, vy, wz], 'health_reasons': h.get('reasons', [])})
         self.observer.publish(s)
 

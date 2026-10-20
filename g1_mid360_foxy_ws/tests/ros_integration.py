@@ -20,6 +20,7 @@ from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from std_msgs.msg import String
 from slam_toolbox.srv import SerializePoseGraph
 from lifecycle_msgs.srv import GetState
+from nav2_msgs.srv import ManageLifecycleNodes
 from tf2_ros import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import PointCloud2
@@ -175,6 +176,10 @@ try:
         pid=child_pid(executable,nav.pid)
         os.kill(pid,signal.SIGSTOP)
         try:
+            if executable=='tf_adapter':
+                wait(lambda:any('TF_STALE_OR_FUTURE' in reason for reason in health().get('reasons',[])),10)
+            else:
+                wait(lambda:json.loads(latest['observer'].data).get('health_age_s',0)>.35,10)
             wait(lambda:'observer' in latest and json.loads(latest['observer'].data)['safe_preview']==[0.,0.,0.] and
                 json.loads(latest['observer'].data)['reason']=='HEALTH_TIMEOUT_OR_INHIBIT',10)
             passed('independent_timer_stop_'+label)
@@ -188,6 +193,12 @@ try:
     wait(lambda:json.loads(latest['observer'].data)['safe_preview']==[0.,0.,0.],5)
     passed('duplicate_tf_owner_latched_inhibit')
     passed('sdk_write_count_zero_all_ros_phases')
+    for manager in ('lifecycle_manager_navigation','lifecycle_manager_localization'):
+        client=node.create_client(ManageLifecycleNodes,'/'+manager+'/manage_nodes')
+        assert client.wait_for_service(timeout_sec=5)
+        request=ManageLifecycleNodes.Request();request.command=ManageLifecycleNodes.Request.SHUTDOWN
+        done=client.call_async(request);wait(lambda:done.done(),25);assert done.result().success
+    passed('nav2_orderly_lifecycle_shutdown')
 finally:
     (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
     (OUT/'last-health.json').write_text(json.dumps(health(),indent=2))

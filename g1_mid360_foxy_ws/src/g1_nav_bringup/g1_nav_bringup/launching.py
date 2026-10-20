@@ -95,7 +95,10 @@ def configure(context):
     actions.append(RegisterEventHandler(OnShutdown(on_shutdown=cleanup)))
     downstream = []
     if mode == 'mapping':
+        debug_prefix = ("gdb -q -batch --return-child-result -ex 'handle SIGINT nostop noprint pass' "
+                        "-ex run -ex 'thread apply all bt' --args") if os.environ.get('G1_NAV_DEBUG_SLAM') == '1' else ''
         downstream.append(Node(package='slam_toolbox', executable='async_slam_toolbox_node',
+            prefix=debug_prefix,
             name='slam_toolbox', output='screen', parameters=[share('g1_nav_config', 'config', 'slam.yaml'),
                 {'use_sim_time': False, 'max_laser_range': float(site['filter']['range_max'])}]))
     else:
