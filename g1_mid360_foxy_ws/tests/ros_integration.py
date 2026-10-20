@@ -160,8 +160,9 @@ try:
     passed('no_generic_cmd_vel_output_to_existing_bridges')
     wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')
     fault_reasons={'cloud_loss':'cloud:TIMEOUT','odom_loss':'odom:TIMEOUT','stale_time':'STALE_STAMP',
-                   'future_time':'FUTURE_STAMP','wrong_frame':'WRONG_FRAME_cloud'}
-    for injected in ('dynamic_obstacle','cloud_loss','odom_loss','stale_time','future_time','wrong_frame'):
+                   'future_time':'FUTURE_STAMP','wrong_frame':'WRONG_FRAME_cloud',
+                   'unsupported_layout':'UNSUPPORTED_FOXY_SCAN_LAYOUT'}
+    for injected in ('dynamic_obstacle','cloud_loss','odom_loss','stale_time','future_time','wrong_frame','unsupported_layout'):
         fault.write_text(injected)
         if injected=='dynamic_obstacle':
             wait(lambda:health().get('obstacle_stop') is True,10)

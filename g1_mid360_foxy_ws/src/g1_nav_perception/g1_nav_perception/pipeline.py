@@ -83,6 +83,10 @@ class Pipeline(Node):
         ok = self.accept('cloud', msg, 'livox_frame')
         if not ok or not self.calibrated:
             return
+        xyz = {field.name: field for field in msg.fields}
+        if msg.is_bigendian or any(name not in xyz or xyz[name].datatype != PointField.FLOAT32 for name in ('x', 'y', 'z')):
+            self.frame_errors['cloud'] = 'UNSUPPORTED_FOXY_SCAN_LAYOUT: requires little-endian FLOAT32 XYZ'
+            return
         c, f = self.site['calibration'], self.site['filter']
         try:
             data, width, stats = crop(msg, c['translation_xyz'], c['quaternion_xyzw'], f['min_height'], f['max_height'])

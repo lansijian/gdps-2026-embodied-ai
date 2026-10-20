@@ -49,6 +49,8 @@ class Fixture(Node):
         if dynamic not in self.payloads:
             self.payloads[dynamic] = self.build_cloud(dynamic)
         m = self.payloads[dynamic]
+        for field in m.fields:
+            field.datatype=PointField.FLOAT64 if fault=='unsupported_layout' else PointField.FLOAT32
         m.header.frame_id='wrong_sensor' if fault=='wrong_frame' else 'livox_frame'
         m.header.stamp=self.stamp()
         self.cloud.publish(m)

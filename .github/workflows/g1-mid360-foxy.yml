@@ -2,6 +2,12 @@ name: G1 MID360 Foxy dry-run
 on:
   push:
     branches: [codex/g1-mid360-foxy-dryrun-20261020]
+    paths:
+      - 'g1_mid360_foxy_ws/src/**'
+      - 'g1_mid360_foxy_ws/scripts/**'
+      - 'g1_mid360_foxy_ws/tests/**'
+      - 'g1_mid360_foxy_ws/third_party.lock'
+      - '.github/workflows/g1-mid360-foxy.yml'
   pull_request:
     paths: ['g1_mid360_foxy_ws/**', '.github/workflows/g1-mid360-foxy.yml']
   workflow_dispatch:
