@@ -1,0 +1,39 @@
+# Cultural-tourism exhibit target matching defaults.
+# Copy to matcher.yaml if you need local overrides, or pass this file with --config.
+# matcher.example.json must stay in sync with this file (JSON fallback without PyYAML).
+
+matcher:
+  method: sift              # sift | orb (run_mac_camera.py 默认传 orb 快速档)
+  max_side: 1200            # resize templates and queries to this longest side
+  max_features: 1500
+  ratio_test: 0.70          # Lowe ratio test
+  ransac_reproj_px: 5.0
+  min_inliers: 20
+  min_inlier_ratio: 0.40
+  min_confidence: 0.50
+  min_margin: 0.15          # Top-1 vs Top-2 inlier margin (不同展品组之间)
+  confidence_full_inliers: 120.0
+  confidence_full_ratio: 0.60
+  confidence_full_margin: 0.50
+  top_k: 3
+  prefilter: orb            # orb = ORB 粗筛只精匹配前 K 张; off = 全量精确匹配
+  prefilter_top_k: 3        # shortlist 大小（低分/低 margin 自动回退全量扫描）
+  dedupe: true              # 内容完全相同的模板只保留一张（如 25.jpg / 025.jpg）
+
+temporal:
+  # Time-based smoothing; the CLIs convert these to result counts using the
+  # actual match rate, so changing --match-every keeps the same duration.
+  window_s: 1.0
+  min_vote_ratio: 0.6       # fraction of the window that must agree
+  hold_s: 1.6
+  assumed_match_rate: 0.0   # 0 = 用实测摄像头 fps / match_every；>0 仅当摄像头不报 fps 时兜底
+
+video:
+  match_every: 2            # 每 N 帧才送匹配队列（方案 C）；1 = 每帧都匹配
+  output_fps: 0.0           # 0 = use the source frame rate
+
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  backend: dshow            # dshow | msmf | avfoundation | any
