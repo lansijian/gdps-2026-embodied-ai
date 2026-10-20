@@ -77,6 +77,14 @@ def health():return json.loads(latest['health'].data) if 'health' in latest else
 results=[]
 def passed(label):
     results.append({'test':label,'status':'PASS','data_source':'SYNTHETIC_TEST'});print('PASS',label,flush=True)
+def active(name,timeout=40):
+    client=node.create_client(GetState,'/'+name+'/get_state')
+    assert client.wait_for_service(timeout_sec=timeout),'missing lifecycle service '+name
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        state=client.call_async(GetState.Request());wait(lambda:state.done(),5)
+        if state.result().current_state.id==3:return
+    raise AssertionError('lifecycle did not become ACTIVE: '+name)
 def child_pid(executable, group):
     matches=[]
     for entry in Path('/proc').iterdir():
@@ -123,6 +131,9 @@ try:
     pose_pub.publish(p)
     wait(lambda:health().get('map_ready') is True,25)
     wait(lambda:'costmap' in latest,45);passed('map_reloaded_amcl_and_costmap_active')
+    for name in ('map_server','amcl','controller_server','planner_server','recoveries_server','bt_navigator'):
+        active(name)
+    passed('all_six_nav2_lifecycle_nodes_active')
     planner=ActionClient(node,ComputePathToPose,'/compute_path_to_pose')
     assert planner.wait_for_server(timeout_sec=30)
     goal=ComputePathToPose.Goal();goal.pose.header.frame_id='map';goal.pose.header.stamp=node.get_clock().now().to_msg()
