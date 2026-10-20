@@ -1,0 +1,11 @@
+# Reference: colcon workspace layout.
+build/
+install/
+log/
+maps/*.pgm
+.reference/
+.deps/
+__pycache__/
+*.pyc
+evidence/
+dist/

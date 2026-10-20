@@ -1,0 +1,57 @@
+# Reference: ROS 2 Foxy container/colcon workflow; GitHub Actions matrix runners.
+name: g1-nav2-foxy-build
+on:
+  push:
+    branches: ['codex/g1-nav2-foxy-minimal-20261020']
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    container: ros:foxy-ros-base-focal@sha256:34fbe32f5b1cd3eb25f6becaaa1d293bad754d64c31d96e638e4b30ed82f9f8e
+    defaults:
+      run:
+        shell: bash
+        working-directory: g1_nav2_ws
+    steps:
+      - uses: actions/checkout@v4
+      - name: dependencies (Focal Foxy CycloneDDS 0.10.2)
+        run: bash src/g1_nav_bringup/scripts/install_deps.sh --ci
+      - name: build
+        run: |
+          source .deps/environment.bash
+          colcon build --symlink-install --event-handlers console_direct+
+      - name: lint-no-gates
+        run: |
+          ! grep -rnE 'RESTART_REQUIRED|BLOCKED_|latch|smoke|verified|ReceiptClock|robot_center' src/
+          python3 -m compileall -q src tests
+      - name: bridge behavior
+        run: |
+          source .deps/environment.bash
+          source install/setup.bash
+          python3 tests/test_bridge.py
+      - name: no-hardware-driver-launch
+        run: |
+          source .deps/environment.bash
+          source install/setup.bash
+          mkdir -p evidence
+          set +e
+          timeout --signal=INT 15 ros2 launch g1_nav_bringup mapping.launch.py > evidence/no-hardware.log 2>&1
+          result=$?
+          set -e
+          test "$result" -eq 124
+          ! grep -E '(slam_toolbox|pointcloud_to_laserscan|odom_bridge).*process has died' evidence/no-hardware.log
+      - name: synthetic-pipeline-and-nav2-action
+        run: |
+          source .deps/environment.bash
+          source install/setup.bash
+          python3 tests/launch_check.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: g1-nav2-foxy-${{ matrix.runner }}
+          path: g1_nav2_ws/evidence/

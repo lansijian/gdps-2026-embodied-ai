@@ -1,0 +1,14 @@
+# Reference: Unitree LocoClient API; values from the G1 task specification.
+cmd_vel_bridge:
+  ros__parameters:
+    dry_run: true
+    interface: eth0
+    deadband_x: 0.05
+    deadband_y: 0.05
+    deadband_w: 0.1
+    min_vx: -0.3
+    max_vx: 0.5
+    max_vy: 0.2
+    max_w: 0.5
+    timeout_sec: 0.5
+    duration: 0.1

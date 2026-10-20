@@ -1,0 +1,22 @@
+{
+  "livox": {
+    "repo": "Livox-SDK/livox_ros_driver2",
+    "commit": "21445540f0d100dc86a7e6df312dd70bbdb4afdf"
+  },
+  "sdk": {
+    "repo": "Livox-SDK/Livox-SDK2",
+    "commit": "c0796f04c143143899c87a773d9f6b7136453c0b"
+  },
+  "cyclone": {
+    "repo": "eclipse-cyclonedds/cyclonedds",
+    "commit": "9995905bce6c4cf9f740d6438bbf7fcfd1c83dfd"
+  },
+  "rmw": {
+    "repo": "ros2/rmw_cyclonedds",
+    "commit": "c12abc56983204f1d91f2d839d394528c7b29b42"
+  },
+  "unitree": {
+    "repo": "unitreerobotics/unitree_sdk2_python",
+    "commit": "814556d15970dd2ecf1c9984e845ca02ab07e206"
+  }
+}
