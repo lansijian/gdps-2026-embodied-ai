@@ -14,10 +14,13 @@ from cmd_vel_bridge.bridge_node import Bridge, shape
 class Client:
     def __init__(self):
         self.calls = []
+        self.fail_set_velocity = False
 
     def __getattr__(self, name):
         def call(*args):
             self.calls.append((name, args))
+            if name == 'SetVelocity' and self.fail_set_velocity:
+                raise RuntimeError('simulated SDK RPC failure')
             return (0, 777) if name == 'GetFsmId' else 0
         return call
 
@@ -66,6 +69,18 @@ class Tests(unittest.TestCase):
         self.assertEqual(list(self.node.timers)[0].timer_period_ns, 20000000)
         self.node.release()
         self.assertEqual(self.client.calls[-2:], [('SetBalanceMode', (0,)), ('SetFsmId', (777,))])
+
+    def test_set_velocity_exception_keeps_timer_alive(self):
+        self.client.fail_set_velocity = True
+        msg = Twist()
+        msg.linear.x = 0.2
+        self.node.receive(msg)
+        self.node.send()
+        self.assertEqual(self.client.calls[-1], ('SetVelocity', (0.2, 0., 0., 0.1)))
+        self.client.fail_set_velocity = False
+        with patch('cmd_vel_bridge.bridge_node.time.monotonic', return_value=self.node.received + 0.5):
+            self.node.send()
+        self.assertEqual(self.client.calls[-1], ('SetVelocity', (0., 0., 0., 0.1)))
 
     def test_dry_run_has_no_sdk_calls(self):
         self.node.destroy_node()

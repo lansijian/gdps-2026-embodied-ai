@@ -3,6 +3,7 @@
 
 Native ROS odometry by default; optional SDK measured SportModeState adapter.
 LowState contains IMU/motors, not measured base position or velocity.
+Console script `odom_bridge` of package g1_nav_bringup.
 """
 import math
 

@@ -15,12 +15,17 @@ def generate_launch_description():
     base = LaunchConfiguration('base_frame')
     scan = LaunchConfiguration('scan_topic')
     config = RewrittenYaml(source_file=os.path.join(share, 'config', 'pcl_to_scan.yaml'),
-                           root_key='', param_rewrites={'target_frame': base}, convert_types=True)
+                           root_key='', convert_types=True,
+                           param_rewrites={'target_frame': base,
+                                           'min_height': LaunchConfiguration('scan_min_height'),
+                                           'max_height': LaunchConfiguration('scan_max_height')})
     args = [DeclareLaunchArgument('base_frame', default_value='base_link'),
             DeclareLaunchArgument('scan_topic', default_value='/scan'),
             DeclareLaunchArgument('start_driver', default_value='true'),
-            DeclareLaunchArgument('mid360_config', default_value=os.path.join(share, 'config', 'mid360_config.json'))]
-    # Archive's coarse Y-axis half-turn, NOT a precision calibration or an X-axis roll.
+            DeclareLaunchArgument('mid360_config', default_value=os.path.join(share, 'config', 'mid360_config.json')),
+            DeclareLaunchArgument('scan_min_height', default_value='-0.05'),
+            DeclareLaunchArgument('scan_max_height', default_value='0.35')]
+    # Field-note coarse Y-axis half-turn, NOT a precision calibration or an X-axis roll.
     for key, value in [('lidar_x', '0'), ('lidar_y', '0'), ('lidar_z', '0.4'),
                        ('lidar_qx', '0'), ('lidar_qy', '1'), ('lidar_qz', '0'), ('lidar_qw', '0')]:
         args.append(DeclareLaunchArgument(key, default_value=value))

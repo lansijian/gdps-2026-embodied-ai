@@ -56,9 +56,13 @@ class Bridge(Node):
         if self.received is None or time.monotonic() - self.received >= self.p['timeout_sec']:
             velocity = (0.0, 0.0, 0.0)
         if self.client is not None:
-            result = self.client.SetVelocity(*velocity, self.p['duration'])
-            if result != 0:
-                self.get_logger().error('SetVelocity returned {}'.format(result))
+            try:
+                result = self.client.SetVelocity(*velocity, self.p['duration'])
+            except Exception as error:
+                self.get_logger().error('SetVelocity raised {!r}; timer keeps running and the timeout still sends zero velocity'.format(error))
+            else:
+                if result != 0:
+                    self.get_logger().error('SetVelocity returned {}'.format(result))
 
     def release(self):
         if self.client is not None:

@@ -34,6 +34,8 @@ jobs:
         run: |
           ! grep -rnE 'RESTART_REQUIRED|BLOCKED_|latch|smoke|verified|ReceiptClock|robot_center' src/
           python3 -m compileall -q src tests
+      - name: config-and-launch-wiring
+        run: python3 tests/test_config.py
       - name: bridge behavior
         run: |
           source .deps/environment.bash
@@ -57,7 +59,7 @@ jobs:
           result=$?
           set -e
           test "$result" -eq 124
-          ! grep -E '(slam_toolbox|pointcloud_to_laserscan|python3).*process has died' evidence/no-hardware-running.log
+          ! grep -E '(slam_toolbox|pointcloud_to_laserscan|odom_bridge).*process has died' evidence/no-hardware-running.log
       - name: synthetic-pipeline-and-nav2-action
         run: |
           source .deps/environment.bash
