@@ -98,7 +98,7 @@ bash src/g1_nav_bringup/scripts/save_map.sh
 #       /home/unitree/maps/site_posegraph.posegraph（slam_toolbox 序列化图）
 ```
 
-序列化服务类型是 `slam_toolbox/srv/SerializePoseGraph`（任何旧写法 `slam_toolbox/srv/SerializeMap` 一律作废），服务名 `/slam_toolbox/serialize_map`；最终以机上 `ros2 service type /slam_toolbox/serialize_map` 实测为准。
+序列化服务类型为 `slam_toolbox/srv/SerializePoseGraph`（任何以 Map 结尾的旧类型名一律作废，不得再使用），服务名 `/slam_toolbox/serialize_map`；最终以机上 `ros2 service type /slam_toolbox/serialize_map` 实测为准。
 
 调参闸（顺序不可颠倒）：只有 check_stack 正墙、TF、`/odom` 全干净后，若建图仍稀疏/分段，才允许把 slam_toolbox 的 `minimum_time_interval` / `minimum_travel_distance` / `minimum_travel_heading` 从 0.5 调到 0.2，`map_update_interval` 从 5.0 调到 2.0；**禁止**先动 `use_scan_matching` / correlative / loop closing 参数。
 

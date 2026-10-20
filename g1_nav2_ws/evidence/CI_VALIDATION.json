@@ -1,0 +1,46 @@
+{
+  "commit": "0a18e726bf3d77d9fd3b4c698465de8733ab0982",
+  "branch": "codex/g1-nav2-foxy-minimal-20261020",
+  "ci": "https://github.com/lansijian/gdps-2026-embodied-ai/actions/runs/39457298308",
+  "ci_run_id": 39457298308,
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "build (ubuntu-22.04)",
+      "id": 118747390887,
+      "conclusion": "success",
+      "steps": {
+        "dependencies (Focal Foxy CycloneDDS 0.10.2)": "success",
+        "build": "success",
+        "lint-no-gates": "success",
+        "config-and-launch-wiring": "success",
+        "bridge behavior": "success",
+        "no-hardware-driver-launch": "success",
+        "synthetic-pipeline-and-nav2-action": "success"
+      }
+    },
+    {
+      "name": "build (ubuntu-24.04-arm)",
+      "id": 118747390397,
+      "conclusion": "success",
+      "steps": {
+        "dependencies (Focal Foxy CycloneDDS 0.10.2)": "success",
+        "build": "success",
+        "lint-no-gates": "success",
+        "config-and-launch-wiring": "success",
+        "bridge behavior": "success",
+        "no-hardware-driver-launch": "success",
+        "synthetic-pipeline-and-nav2-action": "success"
+      }
+    }
+  ],
+  "hardware_executed": false,
+  "pr_status": "GitHub API returned 403 for PR/log download without credentials; branch push + CI verification only",
+  "unverified": [
+    "Front-wall test on the real robot (Y-180 vs X-180 lidar quaternion decision)",
+    "Real native odometry semantics (/dog_odom) and rt/sportmodestate availability on the G1 firmware",
+    "Firmware motion/stop behavior incl. SDK issue #170 and the 0.1 s velocity-duration stop",
+    "Real sensor frequency/timestamps/synchronization and field dynamic-obstacle avoidance"
+  ],
+  "note": "No local ROS validation on the Windows host; ROS-level evidence is GitHub Actions CI only. Realtime SLAM restarts with a new map - run scripts/save_map.sh before stopping mapping if the map must be reused with slam:=false."
+}
