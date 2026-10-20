@@ -42,6 +42,8 @@ class MotionLock:
         else:
             import fcntl
 
+            fd = os.open(str(lock_path), flags)
+            handle = os.fdopen(fd, "r+")
             try:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as exc:
