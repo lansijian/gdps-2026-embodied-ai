@@ -91,7 +91,7 @@ def configure(context):
         return []
     actions.append(RegisterEventHandler(OnProcessExit(target_action=bridge, on_exit=bridge_exit)))
     gate = Node(package='g1_nav_perception', executable='runtime_preflight', output='screen',
-                parameters=[{'use_sim_time': False, 'duration_s': 30., 'timeout_s': 60.,
+                parameters=[{'use_sim_time': False, 'duration_s': 30., 'timeout_s': 60., 'require_unowned_odom': True,
                              'minimum_cloud_hz': float(site['diagnostics']['minimum_cloud_hz']),
                              'minimum_odom_hz': float(site['diagnostics']['minimum_odom_hz'])}])
     nav = yaml.safe_load(Path(share('g1_nav_config', 'config', 'nav2.yaml')).read_text())

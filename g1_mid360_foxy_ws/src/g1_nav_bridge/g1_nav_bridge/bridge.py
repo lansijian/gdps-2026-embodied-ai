@@ -1,4 +1,4 @@
-"""Observes Nav2 /cmd_vel; isolated safe preview only, no SDK transport exists."""
+"""Observes isolated Nav2 /g1_nav/cmd_vel_nav2; isolated safe preview only, no SDK transport exists."""
 import json
 import time
 import rclpy

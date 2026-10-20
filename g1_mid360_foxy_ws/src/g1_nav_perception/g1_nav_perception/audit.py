@@ -55,6 +55,8 @@ class Gate(Node):
         self.declare_parameter('timeout_s', 45.)
         self.declare_parameter('minimum_cloud_hz', 7.)
         self.declare_parameter('minimum_odom_hz', 20.)
+        self.declare_parameter('require_unowned_odom', False)
+        self.gate_reason = ''
         self.last = None
         self.received = None
         self.since = None
@@ -71,6 +73,10 @@ class Gate(Node):
         h = self.last or {}; now = time.monotonic()
         good = (h.get('healthy') is True and self.received is not None and
                 now-self.received < .3 and self.count_publishers('/g1_nav/health') == 1)
+        self.gate_reason = ''
+        if self.get_parameter('require_unowned_odom').value and 'odom' in h.get('tf_edges', {}):
+            good = False
+            self.gate_reason = 'EXISTING_ODOM_PARENT: refusing a second map->odom owner'
         streams = h.get('streams', {})
         clean_window = True
         for name, hz in (('cloud', self.get_parameter('minimum_cloud_hz').value),
@@ -96,7 +102,7 @@ def gate_main(args=None):
         if node.ready():
             passed = True
             break
-    node.get_logger().info(json.dumps({'passed': passed, 'latest_health': node.last}, default=str))
+    node.get_logger().info(json.dumps({'passed': passed, 'gate_reason': node.gate_reason, 'latest_health': node.last}, default=str))
     node.destroy_node(); rclpy.shutdown(); raise SystemExit(0 if passed else 2)
 
 
