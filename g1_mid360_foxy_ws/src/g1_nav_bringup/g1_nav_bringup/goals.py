@@ -1,4 +1,4 @@
-"""Foxy /goal_pose adapter and a FollowWaypoints action client (no home-grown planner)."""
+"""Foxy FollowWaypoints action client (no home-grown planner)."""
 import json
 import math
 from pathlib import Path
@@ -8,7 +8,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import NavigateToPose, FollowWaypoints
+from nav2_msgs.action import FollowWaypoints
 from action_msgs.msg import GoalStatus
 
 
@@ -21,24 +21,6 @@ def read_waypoints(path):
         if set(p)!={'x','y','yaw'} or not all(isinstance(v,(int,float)) and not isinstance(v,bool) and math.isfinite(v) for v in p.values()):
             raise ValueError('waypoint requires finite x,y,yaw')
     return points
-
-
-class Goals(Node):
-    def __init__(self):
-        super().__init__('g1_nav_goal_adapter')
-        self.client=ActionClient(self,NavigateToPose,'/navigate_to_pose');self.handle=None;self.pending=None
-        self.create_subscription(PoseStamped,'/goal_pose',self.goal,5)
-    def goal(self,msg):
-        if msg.header.frame_id!='map' or not self.client.server_is_ready():
-            self.get_logger().warning('GOAL_REJECTED: map frame and active NavigateToPose server required');return
-        if self.pending and not self.pending.done():
-            self.get_logger().warning('GOAL_SEND_IN_PROGRESS');return
-        if self.handle:self.handle.cancel_goal_async()
-        request=NavigateToPose.Goal();request.pose=msg
-        self.pending=self.client.send_goal_async(request)
-        def accepted(future):
-            self.handle=future.result();self.get_logger().info('GOAL_ACCEPTED='+str(self.handle.accepted))
-        self.pending.add_done_callback(accepted)
 
 
 class Waypoints(Node):
@@ -79,12 +61,6 @@ class Waypoints(Node):
     def destroy_node(self):
         if self.active:self.active.cancel_goal_async()
         super().destroy_node()
-
-
-def main(args=None):
-    rclpy.init(args=args);node=Goals()
-    from g1_nav_perception.runtime import spin
-    spin(node)
 
 
 def waypoint_main(args=None):

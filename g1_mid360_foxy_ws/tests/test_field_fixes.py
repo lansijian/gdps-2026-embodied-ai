@@ -232,7 +232,7 @@ def launching(monkeypatch, tmp_path):
     install_modules(monkeypatch, {
         'ament_index_python.packages': {'get_package_share_directory': lambda name:str(ROOT/'src'/name), 'get_package_prefix':lambda _:str(prefix)},
         'launch': {'LaunchDescription': Action},
-        'launch.actions': {k:Action for k in ('DeclareLaunchArgument','OpaqueFunction','RegisterEventHandler','EmitEvent','LogInfo','SetEnvironmentVariable')},
+        'launch.actions': {k:Action for k in ('DeclareLaunchArgument','OpaqueFunction','RegisterEventHandler','EmitEvent','LogInfo','SetEnvironmentVariable','RaiseError')},
         'launch.event_handlers': {'OnProcessExit':Action,'OnShutdown':Action},
         'launch.events': {'Shutdown':Action}, 'launch.substitutions': {'LaunchConfiguration':Substitution},
         'launch_ros.actions': {'Node':Action}})

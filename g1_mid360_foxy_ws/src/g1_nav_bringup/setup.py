@@ -12,4 +12,4 @@ setup(name=package_name, version='0.1.0', packages=find_packages(),
       data_files=data, install_requires=['setuptools'], zip_safe=True,
       maintainer='GDPS', maintainer_email='maintainers@example.invalid',
       description='G1 MID-360 Foxy dry-run navigation; LIVE disabled', license='BSD-3-Clause',
-      entry_points={'console_scripts': ['shutdown = g1_nav_bringup.shutdown:main', 'legacy_preflight = g1_nav_bringup.preflight:main', 'resource_watchdog = g1_nav_bringup.watchdog:main', 'goal_adapter = g1_nav_bringup.goals:main', 'waypoint_client = g1_nav_bringup.goals:waypoint_main']})
+      entry_points={'console_scripts': ['shutdown = g1_nav_bringup.shutdown:main', 'legacy_preflight = g1_nav_bringup.preflight:main', 'resource_watchdog = g1_nav_bringup.watchdog:main', 'waypoint_client = g1_nav_bringup.goals:waypoint_main']})
