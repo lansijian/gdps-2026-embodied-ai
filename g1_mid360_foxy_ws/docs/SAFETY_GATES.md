@@ -13,3 +13,5 @@
 未来 LIVE 必须另行实现并验证：真实 SDK 版本/SetVelocity/Move/StopMove/GetFsmId 签名与 RPC 状态；现场 FSM 人工确认（不固化 500/501）；独立硬件急停与跌倒保护；旁站人员/清场；安全场地；扫描盲区/台阶/负障碍限制；仿真故障测试；独立于 ROS 和阻塞 SDK RPC 的停止守护；唯一运动权限；逐级速度与制动实测。当前所有这些门禁 **未完成，无法启用 LIVE**。
 
 MID-360 8–10Hz 和 2D 投影不能证明楼梯、玻璃、镜面、负障碍或全环境动态避障安全。ObstacleLayer 同时使用 LaserScan 和经过校准的 3D 点云高程窗口，仍可能遗漏窗口以外物体。CPU 性能、真正扫描端到端延迟、刹车、足迹和局部规划效果必须在 G1 实测后复审。
+
+为防止旧 LIVE 桥意外收到全局 cmd_vel，controller_server 的 cmd_vel 输出硬重映射到 `/g1_nav/cmd_vel_nav2`，回收动作输出隔离到 `/g1_nav/recovery_cmd_vel_disabled`。本项目不发布全局 `/cmd_vel`；safe 仍只是预览。运动锁占用或 dry bridge 退出会关闭整个集成入口，不能在桥失效时悄悄留下 Nav2 自动发布。

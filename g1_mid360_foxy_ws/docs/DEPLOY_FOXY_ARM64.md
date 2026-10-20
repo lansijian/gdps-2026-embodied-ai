@@ -81,7 +81,7 @@ ros2 lifecycle get /bt_navigator
 ros2 topic echo /g1_nav/command_observer
 ```
 
-smoke 为主动 scan/TF/时间门禁，不替代地图、规划和硬件验收。另行检查 `/plan`、`/local_costmap/costmap`、`/global_costmap/costmap` 与 `/cmd_vel`。禁止为通过检查而造图、伪造 TF 或扩大时间容差。
+smoke 为主动 scan/TF/时间门禁，不替代地图、规划和硬件验收。另行检查 `/plan`、`/local_costmap/costmap`、`/global_costmap/costmap` 与 `/g1_nav/cmd_vel_nav2`。禁止为通过检查而造图、伪造 TF 或扩大时间容差。
 
 ## 地图保存和回滚
 

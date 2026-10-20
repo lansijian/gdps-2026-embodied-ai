@@ -62,7 +62,7 @@ def receive(key):
 node.create_subscription(String,'/g1_nav/health',receive('health'),10)
 node.create_subscription(String,'/g1_nav/command_observer',receive('observer'),10)
 node.create_subscription(Twist,'/g1_nav/cmd_vel_safe',receive('safe'),10)
-node.create_subscription(Twist,'/cmd_vel',receive('cmd'),10)
+node.create_subscription(Twist,'/g1_nav/cmd_vel_nav2',receive('cmd'),10)
 node.create_subscription(NavPath,'/plan',receive('path'),10)
 node.create_subscription(OccupancyGrid,'/local_costmap/costmap',receive('costmap'),10)
 node.create_subscription(OccupancyGrid,'/map',receive('map'),QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
@@ -150,6 +150,8 @@ try:
     ng=NavigateToPose.Goal();ng.pose=goal.pose
     nf=navigator.send_goal_async(ng);wait(lambda:nf.done(),10);assert nf.result().accepted
     wait(lambda:'cmd' in latest and abs(latest['cmd'].linear.x)>0,30);passed('dwb_generates_cmd_vel_without_sdk')
+    assert node.count_publishers('/cmd_vel')==0
+    passed('no_generic_cmd_vel_output_to_existing_bridges')
     wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')
     fault_reasons={'cloud_loss':'cloud:TIMEOUT','odom_loss':'odom:TIMEOUT','stale_time':'STALE_STAMP',
                    'future_time':'FUTURE_STAMP','wrong_frame':'WRONG_FRAME_cloud'}

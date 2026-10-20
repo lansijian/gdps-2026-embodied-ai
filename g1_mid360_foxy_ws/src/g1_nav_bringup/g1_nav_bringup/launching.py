@@ -84,6 +84,12 @@ def configure(context):
         return actions
     actions.append(Node(package='g1_nav_bridge', executable='dry_bridge', output='screen',
                         parameters=parameters+[{'allow_live': False, 'dry_run': True}]))
+    bridge = actions[-1]
+    def bridge_exit(event, ctx):
+        if not ctx.is_shutdown:
+            return [EmitEvent(event=Shutdown(reason='Dry bridge exited: lock/observer safety unavailable'))]
+        return []
+    actions.append(RegisterEventHandler(OnProcessExit(target_action=bridge, on_exit=bridge_exit)))
     gate = Node(package='g1_nav_perception', executable='runtime_preflight', output='screen',
                 parameters=[{'use_sim_time': False, 'duration_s': 30., 'timeout_s': 60.,
                              'minimum_cloud_hz': float(site['diagnostics']['minimum_cloud_hz']),
@@ -127,6 +133,8 @@ def configure(context):
                      ('nav2_recoveries', 'recoveries_server'), ('nav2_bt_navigator', 'bt_navigator')]
             for pkg, exe in nodes:
                 remaps = [('odom', '/g1_nav/odom')]
+                if exe == 'controller_server':
+                    remaps.append(('cmd_vel', '/g1_nav/cmd_vel_nav2'))
                 if exe == 'recoveries_server':
                     remaps.append(('cmd_vel', '/g1_nav/recovery_cmd_vel_disabled'))
                 downstream.append(Node(package=pkg, executable=exe, name=exe, output='screen',

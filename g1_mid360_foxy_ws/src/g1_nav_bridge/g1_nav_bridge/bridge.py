@@ -23,7 +23,7 @@ class Bridge(Node):
         self.health_received = None
         self.safe = self.create_publisher(Twist, '/g1_nav/cmd_vel_safe', 10)
         self.observer = self.create_publisher(String, '/g1_nav/command_observer', 10)
-        self.create_subscription(Twist, '/cmd_vel', self.command, 10)
+        self.create_subscription(Twist, '/g1_nav/cmd_vel_nav2', self.command, 10)
         self.create_subscription(String, '/g1_nav/health', self.status, 10)
         self.create_timer(.05, self.tick)
 
@@ -44,7 +44,7 @@ class Bridge(Node):
         now = time.monotonic()
         h = self.health or {}
         fresh = self.health_received is not None and now-self.health_received <= .3
-        unique = self.count_publishers('/g1_nav/health') == 1 and self.count_publishers('/cmd_vel') == 1
+        unique = self.count_publishers('/g1_nav/health') == 1 and self.count_publishers('/g1_nav/cmd_vel_nav2') == 1
         ready = (fresh and unique and h.get('healthy') is True and h.get('obstacle_stop') is False
                  and h.get('map_ready') is True)
         reason = 'OBSTACLE_STOP' if h.get('obstacle_stop') else 'HEALTH_TIMEOUT_OR_INHIBIT'
