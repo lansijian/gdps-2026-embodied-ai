@@ -1,0 +1,80 @@
+{
+  "arch": "arm64",
+  "rmw": "rmw_fastrtps_cpp",
+  "data_source": "SYNTHETIC_TEST",
+  "artifact": {
+    "id": 12250898771,
+    "name": "foxy-synthetic-evidence-ubuntu-24.04-arm-rmw_fastrtps_cpp",
+    "digest": "sha256:3401cba364496c26ed8458af01d3ea36b1e0570921d5910b32598a0e13d0a173",
+    "size_in_bytes": 186104
+  },
+  "build_packages": 7,
+  "launch_entries": 6,
+  "installed_entry_points": 11,
+  "contract_tests": 140,
+  "contract_failures": 0,
+  "negative_launch_checks": 3,
+  "qos_offset_matrix_cases": 2,
+  "ros_completed_checks": 9,
+  "integration_conclusion": "failure",
+  "failure_stage": "FollowWaypoints timeout with scan/TF freshness issues",
+  "last_test": "all_seven_nav2_lifecycle_nodes_active",
+  "navigation_entry": "navigation",
+  "time_strategy": "offset",
+  "last_stream_hz": {
+    "cloud": 4.147145413158579,
+    "odom": 624.1401646984737,
+    "imu": 199.59000243050826,
+    "scan": 2.0000505395437593
+  },
+  "ros_check_results": [
+    {
+      "test": "source_scan_tf_health",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "synthetic_20064_point_800hz_odom_200hz_imu_profile",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "incompatible_qos_probe_no_messages_pipeline_receives",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_toolbox_nonempty_map",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "occupancy_map_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "posegraph_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_clean_process_shutdown",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "map_reloaded_amcl_and_costmap_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "all_seven_nav2_lifecycle_nodes_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    }
+  ],
+  "sdk_imported_by_entry_check": false,
+  "hardware_verified": false,
+  "note": "last rates include fault-injection windows; not G1 performance or sustained throughput certification"
+}

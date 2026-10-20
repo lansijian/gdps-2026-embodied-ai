@@ -77,7 +77,7 @@ bash scripts/start_stack.sh dry_run map:=/home/unitree/maps/site_stage3.yaml
 
 ## 真实运动使能条件
 
-粗标定/未确认足迹等字段不再阻断节点启动，但保留WARN和健康状态；这与允许机器人行走是两个边界。默认allow_live=false，不导入/初始化SDK。
+粗标定/未确认足迹等字段不再阻断节点启动，但保留WARN和健康状态；这与允许机器人行走是两个边界。默认allow_live=false，不导入/初始化SDK。site.live保留兼容默认值，不是本阶段的硬件使能入口；请保持模板旧值，实际使能只能通过navigation的显式launch参数，健康不满足仍拒绝输出。
 
 现场精标定、真实足迹/场地/盲区审核、时间标定与独立急停确认完成后，填写真实证据，现场操作员才可显式使能。接口/domain不提供虚构默认值：
 
@@ -118,6 +118,8 @@ FastDDS对照实验（两终端一致，库已由实机反馈确认安装）：
 RMW_IMPLEMENTATION=rmw_fastrtps_cpp bash scripts/start_stack.sh dry_run map:=/home/unitree/maps/site_stage3.yaml
 RMW_IMPLEMENTATION=rmw_fastrtps_cpp bash scripts/start_rviz.sh navigation
 ```
+
+最终CI中FastDDS两组未完成集成（ARM64航点超时、x86生命周期关闭超时）；它目前仅作为诊断对照，不作为已验证替代。详见VERIFICATION_REPORT.md。
 
 同一运行不要混用RMW或预载另一家库。回退只需停止新栈，重新使用保存的旧CYCLONEDDS_URI/工作空间；不改厂商服务。OOM效果、实际自编译DDS版本和FastDDS互通仍须G1对照，不能称OOM已解决。
 

@@ -1,3 +1,5 @@
+> Historical baseline snapshot. Stage 3 current facts and outcomes are STAGE3_SPEC.md / VERIFICATION_REPORT.md.
+
 # Dependency evidence
 
 Windows development host has no rclpy, colcon, unitree_sdk2py, Docker or WSL distribution. The supplied G1 historical report says Nav2 core is installed, while nav2_bringup, SLAM Toolbox and cloud-to-scan were not found. These target facts must be remeasured with preflight.sh; they are not current robot verification.

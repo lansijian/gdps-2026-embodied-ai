@@ -1,3 +1,5 @@
+> Historical baseline snapshot. Stage 3 current facts and outcomes are STAGE3_SPEC.md / VERIFICATION_REPORT.md.
+
 # Evidence baseline - 2026-10-20
 
 Target facts in EXECUTION_SPEC.md are user-supplied field observations, not revalidated by this Windows session.

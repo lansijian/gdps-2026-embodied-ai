@@ -15,7 +15,7 @@
 | D3 | src/g1_nav_config/config/cyclonedds.xml；dds_profile.py；scripts/prepare_dds.py、common.sh；launching.py | 模板WhcHigh=2MB、MinimumSocketReceiveBufferSize=30MB；进程CYCLONEDDS_URI指向模板或有明确WARN/JSON的本次有效副本。内核受限时读rmem_max或用独立未绑定socket探测并显式限缩，不改sysctl/旧XML；保留回退说明 |
 | D4 | src/g1_nav_bringup/g1_nav_bringup/watchdog.py；pipeline.py | 每5秒读取本launch后代RSS，单进程>2GiB WARN，>4GiB记录ERROR/PID/可解析话题后终止，主launch随后结束；经resource_health汇入唯一health；nav2-only单独由watchdog发health |
 | D5 | launching.py；start_stack.sh | --nav2-only对应nav2_only:=true，仅Nav2与watchdog，不起感知/SLAM/TF/SDK桥，禁止在该隔离模式使能LIVE |
-| D6 | scripts/common.sh；README.md；STAGE3_DEPLOY.md；.github/workflows/g1-mid360-foxy.yml（仓库层） | 显式RMW_IMPLEMENTATION=rmw_fastrtps_cpp对照入口；默认Cyclone。CI增加两个RMW×两个原生架构的矩阵；具体结果不预填 |
+| D6 | scripts/common.sh；README.md；STAGE3_DEPLOY.md；.github/workflows/g1-mid360-foxy.yml（仓库层） | 显式RMW_IMPLEMENTATION=rmw_fastrtps_cpp对照入口；默认Cyclone。CI增加两个RMW×两个原生架构的矩阵；最终两组CycloneDDS完成，FastDDS两组在集成阶段失败，见实际记录 |
 | E1 | launch/navigation.launch.py；launching.py；src/g1_nav_bridge/g1_nav_bridge/smoother.py、bridge.py、live_backend.py | 新navigation入口完整链路+AMCL/Nav2+20Hz stamped smoother+桥；提供显式SDK SetVelocity后端，默认allow_live=false，dry_run不能开启。接口/domain需真实传入；不自动切FSM/起立/低层关节 |
 | E2 | src/g1_nav_config/rviz/g1_nav.rviz；Nav2原版bt_navigator | Fixed Frame=map，SetGoal发布/goal_pose，直接复用Foxy内置目标接口；有Map/Plan/LocalCostmap/GlobalCostmap/TF，不新增重复目标转发 |
 | E3 | src/g1_nav_bringup/g1_nav_bringup/goals.py；launching.py；src/g1_nav_config/config/waypoints.example.yaml；config/nav2.yaml | g1_nav_waypoint_follower客户端读map航点列表，调用Foxy官方/FollowWaypoints（首字母大写），由官方server顺序执行；成功且无漏点时才loop，失败停止，输出JSON汇总；不自动执行示例真实坐标 |

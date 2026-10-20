@@ -1,0 +1,165 @@
+{
+  "arch": "x86_64",
+  "rmw": "rmw_fastrtps_cpp",
+  "data_source": "SYNTHETIC_TEST",
+  "artifact": {
+    "id": 12251792386,
+    "name": "foxy-synthetic-evidence-ubuntu-22.04-rmw_fastrtps_cpp",
+    "digest": "sha256:647b3274d955d54181b77ef7c5beb9c1c773c23d51ea19caa272f16ac7fb16f9",
+    "size_in_bytes": 186536
+  },
+  "build_packages": 7,
+  "launch_entries": 6,
+  "installed_entry_points": 11,
+  "contract_tests": 140,
+  "contract_failures": 0,
+  "negative_launch_checks": 3,
+  "qos_offset_matrix_cases": 2,
+  "ros_completed_checks": 26,
+  "integration_conclusion": "failure",
+  "failure_stage": "project lifecycle shutdown timeout",
+  "last_test": "sdk_write_count_zero_all_ros_phases",
+  "navigation_entry": "navigation_dryrun",
+  "time_strategy": "offset",
+  "last_stream_hz": {
+    "cloud": 9.397509301277744,
+    "odom": 471.7709094125329,
+    "imu": 185.49006685071728,
+    "scan": 7.5571373041927865
+  },
+  "ros_check_results": [
+    {
+      "test": "source_scan_tf_health",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "synthetic_20064_point_800hz_odom_200hz_imu_profile",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "incompatible_qos_probe_no_messages_pipeline_receives",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_toolbox_nonempty_map",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "occupancy_map_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "posegraph_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_clean_process_shutdown",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "map_reloaded_amcl_and_costmap_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "all_seven_nav2_lifecycle_nodes_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "follow_waypoints_real_action_and_wrapper_summary_synthetic_nearby_goals",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "navfn_real_action_nonempty_path",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "dwb_generates_cmd_vel_without_sdk",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "no_generic_cmd_vel_output_to_existing_bridges",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "healthy_safe_preview",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_dynamic_obstacle",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "dynamic_obstacle_marked_in_local_costmap",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_cloud_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_odom_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_stale_time",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_future_time",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_wrong_frame",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_unsupported_layout",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "independent_timer_stop_tf_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "independent_timer_stop_health_heartbeat_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "duplicate_tf_owner_latched_inhibit",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "sdk_write_count_zero_all_ros_phases",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    }
+  ],
+  "sdk_imported_by_entry_check": false,
+  "hardware_verified": false,
+  "note": "last rates include fault-injection windows; not G1 performance or sustained throughput certification"
+}

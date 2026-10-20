@@ -6,7 +6,7 @@
 |---|---|---|
 | 每会话offset | 前10帧delta/中位数、校正后时间偏差、30帧抖动、重启后的新标定值 | G1待验证；不固定69.8/4883 |
 | 数据面OOM缓解 | 同场景Cyclone/FastDDS对照、各进程RSS时间序列、health、dmesg和退出记录 | 已实现缓解措施；未证明OOM解决 |
-| 实际DDS配置 | ~/cyclonedds_ws实际rmw/libddsc路径、XML加载日志、30MB接收缓冲可用性、接口/Peers互通 | G1待验证；无系统配置改写 |
+| 实际DDS配置 | ~/cyclonedds_ws实际rmw/libddsc路径、XML加载日志、30MB接收缓冲可用性、接口/Peers互通 | G1待验证；无系统配置改写；FastDDS最终CI对照未验收 |
 | 清理与常驻旧栈 | 清理前PID/节点清单、停止后scan/TF owner、是否被外部服务再次拉起 | G1待验证；不会自动改服务 |
 | 里程计TF | /dog_odom与TF频率、校正stamp、z=0投影、四元数、唯一broadcaster与两个别名 | G1待验证 |
 | 倒装精标定 | 替换粗标定xyz/quaternion、地面/障碍保留率、真实足迹与高程窗口 | 粗标定已按输入落地；精度未认证 |
