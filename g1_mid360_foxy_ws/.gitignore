@@ -6,3 +6,5 @@ log/
 site.yaml
 *.zip
 __pycache__/
+external_sources/
+config/site.yaml

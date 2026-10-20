@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-packages = ['python3-colcon-common-extensions', 'python3-yaml', 'python3-pytest',
+packages = ['python3-colcon-common-extensions', 'python3-yaml', 'python3-pytest', 'python3-numpy',
             'ros-foxy-rmw-cyclonedds-cpp', 'ros-foxy-nav2-bringup', 'ros-foxy-slam-toolbox',
             'ros-foxy-pointcloud-to-laserscan', 'ros-foxy-diagnostic-msgs', 'ros-foxy-tf2-ros',
             'ros-foxy-tf2-msgs', 'ros-foxy-nav2-msgs', 'ros-foxy-ros2bag', 'ros-foxy-rviz2']

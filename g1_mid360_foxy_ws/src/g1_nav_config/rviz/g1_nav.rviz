@@ -1,0 +1,53 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Background Color: 35; 35; 35
+    Fixed Frame: robot_center
+    Frame Rate: 15
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Metric ground reference
+      Enabled: true
+      Cell Size: 0.5
+    - Class: rviz_default_plugins/TF
+      Name: TF axes
+      Enabled: true
+      Show Axes: true
+      Show Names: true
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Original time-validated cloud
+      Enabled: true
+      Topic: /g1_nav/cloud_timed
+      Size (m): 0.02
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Calibrated height-filtered obstacles
+      Enabled: true
+      Topic: /g1_nav/cloud_obstacles
+      Size (m): 0.03
+    - Class: rviz_default_plugins/LaserScan
+      Name: Official scan
+      Enabled: true
+      Topic: /scan
+    - Class: rviz_default_plugins/Map
+      Name: Real map
+      Enabled: true
+      Topic: /map
+    - Class: rviz_default_plugins/Path
+      Name: Navfn path
+      Enabled: true
+      Topic: /plan
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic: /initialpose
+    - Class: nav2_rviz_plugins/GoalTool
+Window Geometry:
+  Width: 1280
+  Height: 900

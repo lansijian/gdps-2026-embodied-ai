@@ -8,6 +8,24 @@ on:
 permissions:
   contents: read
 jobs:
+  pull-request:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const head = 'codex/g1-mid360-foxy-dryrun-20261020';
+            const existing = await github.rest.pulls.list({owner, repo, head: `${owner}:${head}`, state: 'open'});
+            if (existing.data.length) { core.notice(existing.data[0].html_url); return; }
+            const pr = await github.rest.pulls.create({owner, repo, head, base: 'main', draft: true,
+              title: 'feat(g1): Foxy MID-360 dry-run navigation with calibration and clock gates',
+              body: 'Adds an isolated ROS 2 Foxy colcon workspace for factory MID-360, measured TF/time gates, official pointcloud_to_laserscan, SLAM Toolbox/AMCL and Navfn/DWB. LIVE is disabled: no SDK write transport or FSM transitions are installed. Existing robot services and original dirty worktree are preserved.\n\nLocal contract tests passed; the dedicated Foxy container workflow exercises the ROS chain with explicitly labelled synthetic data. See g1_mid360_foxy_ws/docs/VERIFICATION_REPORT.md for final evidence and limitations. ARM64, calibration, real sensor time, real mapping/planning and all hardware acceptance remain ROBOT_VERIFICATION_PENDING.\n\nThis PR must not be interpreted as authorization for motion or merged as a hardware-ready release.'});
+            core.notice(pr.data.html_url);
   foxy:
     runs-on: ubuntu-22.04
     timeout-minutes: 25
