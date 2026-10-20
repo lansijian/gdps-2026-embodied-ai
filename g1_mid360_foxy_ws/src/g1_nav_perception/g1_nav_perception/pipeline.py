@@ -238,8 +238,5 @@ class Pipeline(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = Pipeline()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    from .runtime import spin
+    spin(node)

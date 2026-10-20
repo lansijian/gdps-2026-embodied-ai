@@ -38,6 +38,13 @@ if plan['unavailable']:
     raise SystemExit('APT_CANDIDATE_MISSING; no installation attempted')
 specs = [p['package']+'='+p['install'] for p in plan['plan'] if p['install']]
 if specs:
-    subprocess.run(['sudo', 'apt-get', '--simulate', 'install', '--no-install-recommends']+specs, check=True)
-    subprocess.run(['sudo', 'apt-get', 'install', '--no-install-recommends', '-y']+specs, check=True)
+    simulation = subprocess.run(['apt-get', '--simulate', 'install', '--no-remove', '--no-install-recommends']+specs,
+                                check=True, stdout=subprocess.PIPE, text=True)
+    print(simulation.stdout)
+    if re.search(r'^Remv ', simulation.stdout, re.MULTILINE):
+        raise SystemExit('Dependency removal blocked')
+    # APT prints an [old-version] for upgrades/downgrades of installed packages.
+    if re.search(r'^Inst \S+ \[', simulation.stdout, re.MULTILINE):
+        raise SystemExit('Installed-package changes blocked; review target dependencies manually')
+    subprocess.run(['sudo', 'apt-get', 'install', '--no-remove', '--no-install-recommends', '-y']+specs, check=True)
 subprocess.run(['dpkg-query', '-W']+packages, check=True)

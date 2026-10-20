@@ -49,7 +49,5 @@ class Adapter(Node):
 
 def main(args=None):
     rclpy.init(args=args); node = Adapter()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node(); rclpy.shutdown()
+    from g1_nav_perception.runtime import spin
+    spin(node)

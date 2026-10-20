@@ -62,7 +62,5 @@ class Bridge(Node):
 
 def main(args=None):
     rclpy.init(args=args); node = Bridge()
-    try:
-        rclpy.spin(node)
-    finally:
-        node.destroy_node(); rclpy.shutdown()
+    from g1_nav_perception.runtime import spin
+    spin(node)

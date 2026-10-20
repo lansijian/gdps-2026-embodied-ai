@@ -40,7 +40,8 @@ def start(label,cmd):
     processes.append(p);return p
 def stop(p):
     if p.poll() is None:
-        os.killpg(p.pid,signal.SIGINT)
+        # Signal the launcher once; it forwards shutdown to its children.
+        p.send_signal(signal.SIGINT)
         try:p.wait(15)
         except subprocess.TimeoutExpired:
             os.killpg(p.pid,signal.SIGTERM);p.wait(10)
@@ -77,7 +78,7 @@ try:
     wait(lambda:'map' in latest and latest['map'].info.width>0 and any(x>=0 for x in latest['map'].data),100)
     passed('slam_toolbox_nonempty_map')
     subprocess.run(['ros2','run','nav2_map_server','map_saver_cli','-f',str(OUT/'synthetic-map'),
-                    '--ros-args','-p','save_map_timeout:=10.0'],check=True,timeout=25)
+                    '--ros-args','-p','save_map_timeout:=10000','-p','map_subscribe_transient_local:=true'],check=True,timeout=25)
     assert (OUT/'synthetic-map.yaml').is_file();passed('occupancy_map_saved')
     client=node.create_client(SerializePoseGraph,'/slam_toolbox/serialize_map')
     assert client.wait_for_service(timeout_sec=10)
@@ -129,6 +130,7 @@ try:
     passed('sdk_write_count_zero_all_ros_phases')
 finally:
     (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
+    (OUT/'last-health.json').write_text(json.dumps(health(),indent=2))
     for process in reversed(processes):stop(process)
     node.destroy_node();rclpy.shutdown()
     for f in files:f.close()

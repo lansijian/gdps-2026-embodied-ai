@@ -9,6 +9,10 @@ Set-StrictMode -Version Latest
 if ($RobotHost -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $RobotUser -notmatch '^[a-z_][a-z0-9_-]*$') { throw 'Invalid SSH host/user' }
 if ($Destination -notmatch '^/home/[a-zA-Z0-9_-]+/[a-zA-Z0-9_/-]+$' -or $Destination.Contains('..')) { throw 'Use an explicit safe directory under /home/<user>/' }
 $Source = (Resolve-Path -LiteralPath $Source).Path
+$logDirectory = Join-Path $Source 'logs'
+New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+Start-Transcript -Path (Join-Path $logDirectory ('deploy-' + (Get-Date -Format 'yyyyMMddTHHmmss') + '.log')) | Out-Null
+try {
 $archive = Join-Path $env:TEMP ('g1-mid360-' + [guid]::NewGuid().ToString('N') + '.tar.gz')
 & python (Join-Path $PSScriptRoot 'package_workspace.py') --source $Source --output $archive
 if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
@@ -22,3 +26,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Copy failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Deploy failed; existing destination is never overwritten. Select a new release directory.' }
 Write-Output "Copied with SHA256 $hash. Run bash $Destination/scripts/install_dependencies.sh --plan, review, then --install; bash $Destination/scripts/build_on_g1.sh. No services or motion started."
 Write-Output "Rollback: stop this release with Ctrl-C and return to the previous directory; no factory services are changed. Local archive retained: $archive"
+} finally {
+  Stop-Transcript | Out-Null
+}
