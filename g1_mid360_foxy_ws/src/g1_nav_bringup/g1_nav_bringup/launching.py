@@ -79,6 +79,16 @@ def truth(value):
 
 
 def configure(context):
+    try:
+        return _configure(context)
+    except Exception as exc:
+        target=os.environ.get('G1_NAV_FAILURE_FILE')
+        if target:Path(target).write_text('STARTUP_FAILURE: '+str(exc))
+        print('[ERROR] STARTUP_FAILURE: '+str(exc),flush=True)
+        raise
+
+
+def _configure(context):
     value = lambda name: LaunchConfiguration(name).perform(context)
     mode, rmw = value('mode'), value('rmw')
     if mode not in ('sensor_check', 'mapping', 'localization', 'dry_run', 'navigation'):

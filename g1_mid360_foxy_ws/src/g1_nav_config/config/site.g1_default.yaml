@@ -1,5 +1,6 @@
 # Stage 3 formal startup template. COARSE Y-180/z=0.4 from user input; replace after precision calibration.
 # Footprint/filter/environment remain unverified; startup allowed, live motion inhibited by health.
+time_strategy: offset
 schema_version: 1
 data_source: REAL_SENSOR
 calibration:

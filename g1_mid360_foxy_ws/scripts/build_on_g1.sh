@@ -11,6 +11,7 @@ python3 "$ROOT/scripts/fix_source_mtime.py" --apply
 colcon list --base-paths src
 colcon build --base-paths src --executor sequential --event-handlers console_direct+
 source_overlay
+python3 "$ROOT/scripts/check_entry_points.py"
 for pkg in g1_nav_bringup g1_nav_perception g1_nav_tf g1_nav_tf_authority g1_nav_bridge g1_nav_config g1_ros2_bridge; do
   ros2 pkg prefix "$pkg"
 done

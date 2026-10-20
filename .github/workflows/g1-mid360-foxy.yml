@@ -51,6 +51,7 @@ jobs:
           colcon list --base-paths src
           colcon build --base-paths src --executor sequential --event-handlers console_direct+
           source install/setup.bash
+          python3 scripts/check_entry_points.py > logs/entry-points.json
           for mode in sensor_check mapping localization navigation_dryrun navigation g1_nav_bringup; do
             ros2 launch g1_nav_bringup "$mode.launch.py" --show-args
           done

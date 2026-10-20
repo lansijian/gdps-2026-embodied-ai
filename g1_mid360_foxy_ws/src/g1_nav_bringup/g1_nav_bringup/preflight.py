@@ -11,7 +11,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from tf2_msgs.msg import TFMessage
 
-EXECUTABLES = {'async_slam_toolbox_node','sync_slam_toolbox_node','pointcloud_to_laserscan_node',
+EXECUTABLES = {'async_slam_toolbox_node','sync_slam_toolbox_node','pointcloud_to_laserscan_node','pointcloud_to_laserscan','scan_restamper',
     'planner_server','controller_server','bt_navigator','waypoint_follower','recoveries_server',
     'behavior_server','map_server','amcl','lifecycle_manager','costmap_2d_node',
     'pipeline','tf_adapter','tf_authority','dry_bridge','live_bridge','runtime_preflight',

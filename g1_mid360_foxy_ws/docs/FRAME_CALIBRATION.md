@@ -1,3 +1,7 @@
+# Stage 3 notice
+
+正式模板已按用户输入落地Y轴180°/z=0.4粗标定，允许调试启动；不代表精度认证。odom->robot_center默认投影z=0，并有base_link/base_footprint别名。现场精标定仍按下述计算/证据流程替换粗值；新启动边界见STAGE3_DEPLOY.md。
+
 # 倒装 MID-360 标定门禁
 
 真实安装平移 xyz、四元数 xyzw、地面参考高度、点云轴向、机体足迹当前全部 UNKNOWN。模板 null 为故意阻断。第三方 URDF 的 livox_joint 约 X 轴 π 只作候选证据；不能证明本机 mid360_link 与 robot_center 的关系。

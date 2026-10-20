@@ -222,3 +222,12 @@ def test_motion_lock_is_held_until_pending_sdk_call_finishes(bridge_module,monke
     assert not released
     callbacks[0](None)
     assert released==[True]
+
+
+def test_formal_site_and_top_level_time_strategy_are_used(launching):
+    root=Path(__file__).resolve().parents[1]
+    site=launching.read_site(root/'config/site.g1_default.yaml')
+    assert site['time_strategy']==site['timing']['strategy']=='offset'
+    assert (root/'config/site.g1_default.yaml').read_bytes()==(root/'src/g1_nav_config/config/site.g1_default.yaml').read_bytes()
+    assert site['calibration']['quaternion_xyzw']==[0.,1.,0.,0.]
+    assert site['calibration']['verified'] is False

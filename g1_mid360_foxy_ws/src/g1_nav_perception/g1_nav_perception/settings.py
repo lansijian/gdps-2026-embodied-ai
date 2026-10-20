@@ -26,4 +26,7 @@ def default_path():
 
 def read_site(path):
     defaults = yaml.safe_load(default_path().read_text())
-    return merge_site(yaml.safe_load(Path(path).read_text()), defaults)
+    site = merge_site(yaml.safe_load(Path(path).read_text()), defaults)
+    if site.get('time_strategy'):
+        site['timing']['strategy'] = site['time_strategy']
+    return site

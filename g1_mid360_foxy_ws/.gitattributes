@@ -1,0 +1,7 @@
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.rviz text eol=lf
+docs/EXECUTION_SPEC.md -text
+docs/STAGE3_SPEC.md -text
