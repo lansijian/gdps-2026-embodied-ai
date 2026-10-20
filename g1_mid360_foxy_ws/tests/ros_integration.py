@@ -51,7 +51,7 @@ def stop(p):
         except subprocess.TimeoutExpired:
             os.killpg(p.pid,signal.SIGTERM);p.wait(10)
 def launch(mode,map_path=None):
-    cmd=['ros2','launch','g1_nav_bringup',mode+'.launch.py','site:='+str(site_path),'time_strategy:=preserve']
+    cmd=['ros2','launch','g1_nav_bringup',mode+'.launch.py','site:='+str(site_path),'time_strategy:=offset']
     if map_path:cmd+=['map:='+str(map_path)]
     return start(mode,cmd)
 rclpy.init();node=Node('SYNTHETIC_TEST_acceptance')
@@ -124,7 +124,8 @@ try:
     assert 'process has died' not in mapping_log and 'received signal SIGSEGV' not in mapping_log,mapping_log[-6000:]
     passed('slam_clean_process_shutdown')
     latest.clear();counts.clear()
-    nav=launch('navigation_dryrun',OUT/'synthetic-map.yaml')
+    nav_mode=os.environ.get('G1_NAV_INTEGRATION_MODE','navigation_dryrun')
+    nav=launch(nav_mode,OUT/'synthetic-map.yaml')
     wait(lambda:health().get('healthy') is True,30)
     pose_pub=node.create_publisher(PoseWithCovarianceStamped,'/initialpose',10)
     # Wait for AMCL lifecycle, then send a single fixture-specific initial pose.
@@ -145,6 +146,16 @@ try:
         active(name)
     active('waypoint_follower')
     passed('all_seven_nav2_lifecycle_nodes_active')
+    waypoints=OUT/'waypoints.yaml';waypoint_report=OUT/'waypoint-report.json'
+    waypoint_report.unlink(missing_ok=True)
+    waypoints.write_text(yaml.safe_dump({'frame_id':'map','waypoints':[{'x':0.,'y':0.,'yaw':0.},{'x':.05,'y':0.,'yaw':0.}]}))
+    patrol=start('waypoint-client',['ros2','run','g1_nav_bringup','waypoint_client','--ros-args',
+        '-p','waypoints_file:='+str(waypoints),'-p','report_file:='+str(waypoint_report)])
+    wait(lambda:waypoint_report.is_file(),40)
+    patrol_result=json.loads(waypoint_report.read_text())
+    assert patrol_result['finished'] and patrol_result['rounds'][-1]['status']==4 and not patrol_result['rounds'][-1]['missed_waypoints'],patrol_result
+    passed('follow_waypoints_real_action_and_wrapper_summary_synthetic_nearby_goals')
+    stop(patrol)
     planner=ActionClient(node,ComputePathToPose,'/compute_path_to_pose')
     assert planner.wait_for_server(timeout_sec=30)
     goal=ComputePathToPose.Goal();goal.pose.header.frame_id='map';goal.pose.header.stamp=node.get_clock().now().to_msg()
@@ -209,11 +220,11 @@ try:
     subprocess.run(['ros2','run','g1_nav_bringup','shutdown'],check=True,timeout=70)
     passed('nav2_orderly_lifecycle_shutdown')
     stop(nav)
-    nav_log=(OUT/'navigation_dryrun.log').read_text(errors='replace')
+    nav_log=(OUT/(nav_mode+'.log')).read_text(errors='replace')
     assert 'process has died' not in nav_log,nav_log[-6000:]
     passed('nav2_clean_process_shutdown')
 finally:
-    (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING','time_strategy':'offset','navigation_entry':os.environ.get('G1_NAV_INTEGRATION_MODE','navigation_dryrun')},indent=2))
     (OUT/'last-health.json').write_text(json.dumps(health(),indent=2))
     for process in reversed(processes):stop(process)
     node.destroy_node();rclpy.shutdown()
