@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import yaml
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
@@ -13,6 +15,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from g1_nav_perception.core import validate_site, Blocked, finite, quaternion
 from g1_nav_perception.settings import read_site
+from g1_nav_perception.dds_profile import prepare as prepare_dds
 from g1_nav_perception.resources import validate_map, validate_nav
 from g1_nav_perception.environment import enforce as enforce_environment
 
@@ -57,11 +60,18 @@ def check_map(path, data_source='REAL_SENSOR'):
 
 
 def failure(message):
-    # Foxy has no launch.actions.RaiseError. An OpaqueFunction exception is
-    # propagated by the launch service and yields a nonzero CLI exit status.
-    def fail(context):
-        raise RuntimeError(message)
-    return OpaqueFunction(function=fail)
+    def record(context):
+        target=os.environ.get('G1_NAV_FAILURE_FILE')
+        if target:Path(target).write_text(message)
+        return [EmitEvent(event=Shutdown(reason=message))]
+    return OpaqueFunction(function=record)
+
+
+def run_preflight(keep_legacy, environment):
+    executable=Path(get_package_prefix('g1_nav_bringup'))/'lib/g1_nav_bringup/legacy_preflight'
+    command=[sys.executable,str(executable),'--check-only']
+    if keep_legacy:command.append('--keep-legacy')
+    return subprocess.run(command,env=environment,timeout=20).returncode
 
 
 def truth(value):
@@ -97,20 +107,23 @@ def configure(context):
     params = [{'use_sim_time': False, 'site': str(Path(site_path).resolve()), 'time_strategy': strategy}]
     actions = notices+[LogInfo(msg='revision=stage3 mode='+mode+' site='+site_path+' strategy='+strategy+' RMW='+rmw),
                         LogInfo(msg='ROS_ENVIRONMENT '+json.dumps(report))]
+    environment=os.environ.copy()
     if rmw == 'rmw_cyclonedds_cpp':
-        actions.append(SetEnvironmentVariable('CYCLONEDDS_URI', 'file://'+str(Path(dds).resolve())))
-    preflight_args = ['--check-only']
-    if truth(value('keep_legacy')):preflight_args.append('--keep-legacy')
-    preflight = Node(package='g1_nav_bringup', executable='legacy_preflight', output='screen', arguments=preflight_args)
-
-    def start_stack(event, ctx):
-        if event.returncode != 0:
-            return [LogInfo(msg='LEGACY_PREFLIGHT_FAILED; no new stack started'), failure('PREFLIGHT_FAILED')]
-        if check_only:
-            return [LogInfo(msg='CHECK_ONLY_COMPLETE'), EmitEvent(event=Shutdown(reason='CHECK_ONLY_COMPLETE'))]
-        return configured_stack(mode, site, params, strategy, rmw, nav_only, allow_live, value, ctx)
-    actions.extend([RegisterEventHandler(OnProcessExit(target_action=preflight, on_exit=start_stack)), preflight])
-    return actions
+        profile=prepare_dds(dds)
+        for warning in profile['warnings']:actions.append(LogInfo(msg='WARN '+warning))
+        uri='file://'+profile['effective_profile']
+        environment['CYCLONEDDS_URI']=uri
+        actions.append(SetEnvironmentVariable('CYCLONEDDS_URI',uri))
+        actions.append(LogInfo(msg='DDS_PROFILE '+json.dumps(profile)))
+        print('DDS_PROFILE '+json.dumps(profile),flush=True)
+    # Synchronous preflight is deliberately before any sensor/TF/Nav2 action.
+    # Foxy may swallow exceptions in async process-exit event tasks; raising here
+    # gives a reliable nonzero CLI failure instead of a misleading successful exit.
+    if run_preflight(truth(value('keep_legacy')),environment)!=0:
+        raise Blocked('LEGACY_PREFLIGHT_FAILED; no new stack started')
+    if check_only:
+        return actions+[LogInfo(msg='CHECK_ONLY_COMPLETE'),EmitEvent(event=Shutdown(reason='CHECK_ONLY_COMPLETE'))]
+    return actions+configured_stack(mode,site,params,strategy,rmw,nav_only,allow_live,value,context)
 
 
 def configured_stack(mode, site, params, strategy, rmw, nav_only, allow_live, value, context):

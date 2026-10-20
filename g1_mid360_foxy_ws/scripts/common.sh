@@ -22,7 +22,8 @@ source_overlay() {
   export G1_NAV_LOG_DIR="$ROOT/logs"
   if [[ "$RMW_IMPLEMENTATION" = rmw_cyclonedds_cpp ]]; then
     export G1_NAV_PREVIOUS_DDS_URI="${CYCLONEDDS_URI:-}"
-    export CYCLONEDDS_URI="file://${G1_NAV_DDS_CONFIG:-$ROOT/src/g1_nav_config/config/cyclonedds.xml}"
+    effective="$(python3 "$ROOT/scripts/prepare_dds.py" --input "${G1_NAV_DDS_CONFIG:-$ROOT/src/g1_nav_config/config/cyclonedds.xml}" --output "$ROOT/logs/cyclonedds-effective-$$.xml")"
+    export CYCLONEDDS_URI="file://$effective"
   fi
   python3 "$ROOT/scripts/ros_environment.py" --phase rmw --output "$ROOT/logs/rmw-environment-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
 }

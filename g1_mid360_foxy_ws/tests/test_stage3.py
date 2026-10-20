@@ -151,3 +151,23 @@ def test_nav2_only_has_no_perception_slam_bridge_and_check_only_never_starts_the
     assert 'planner_server' in names and 'pipeline' not in names and 'dry_bridge' not in names
     actions=after_preflight(launching.configure({'mode':'sensor_check','site':'','map':'','check_only':'true'}))
     assert not any('executable' in a.kwargs for a in actions)
+
+
+@pytest.mark.parametrize('cap,changed', [(1048576,True),(67108864,False)])
+def test_dds_kernel_buffer_cap_is_explicit_and_template_unchanged(tmp_path,cap,changed):
+    from g1_nav_perception.dds_profile import prepare
+    source=Path(__file__).resolve().parents[1]/'src/g1_nav_config/config/cyclonedds.xml'
+    before=source.read_bytes();output=tmp_path/'effective.xml'
+    report=prepare(source,cap=cap,output=output)
+    assert source.read_bytes()==before
+    assert bool(report['warnings']) is changed
+    assert report['applied_receive_minimum_bytes']==min(cap,30*1024*1024)
+    if changed:
+        assert '<WhcHigh>2MB</WhcHigh>' in output.read_text()
+        assert output.with_suffix('.json').is_file()
+
+
+def test_failed_legacy_cleanup_prevents_any_new_node_construction(launching,monkeypatch):
+    monkeypatch.setattr(launching,'run_preflight',lambda *args:2)
+    with pytest.raises(Blocked,match='LEGACY_PREFLIGHT_FAILED'):
+        launching.configure({'mode':'sensor_check','site':'','map':''})

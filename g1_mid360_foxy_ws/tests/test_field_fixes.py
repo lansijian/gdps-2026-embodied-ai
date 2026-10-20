@@ -239,6 +239,7 @@ def launching(monkeypatch, tmp_path):
     name = 'g1_nav_bringup.launching'
     monkeypatch.delitem(sys.modules,name,raising=False)
     mod=importlib.import_module(name)
+    monkeypatch.setattr(mod, 'run_preflight', lambda *args:0)
     monkeypatch.setattr(mod, 'enforce_environment', lambda: {'test':'ROS API double; NOT native environment validation'})
     monkeypatch.setenv('G1_NAV_TEST_ONLY','1')
     monkeypatch.setenv('RMW_IMPLEMENTATION','rmw_cyclonedds_cpp')
@@ -321,7 +322,7 @@ def after_preflight(actions):
         if a.args and 'on_exit' in getattr(a.args[0], 'kwargs', {}):
             cb=a.args[0].kwargs['on_exit']
             if cb.__name__=='start_stack':return cb(NS(returncode=0),NS(is_shutdown=False))
-    raise AssertionError('preflight callback absent')
+    return actions  # Stage3 preflight now executes synchronously before action construction.
 
 
 def test_no_argument_sensor_check_integrates_relay_scan_without_fake_tf(launching):
@@ -340,7 +341,7 @@ def test_dryrun_downstream_uses_bounded_params_actual_frame_and_isolated_command
     actions=after_preflight(launching.configure({'mode':'dry_run','site':str(site),'map':str(mapping)}))
     downstream=[]
     for action in actions:
-        if action.args and 'on_exit' in action.args[0].kwargs:
+        if action.args and 'on_exit' in getattr(action.args[0], 'kwargs', {}):
             callback=action.args[0].kwargs['on_exit']
             if callback.__name__=='admitted': downstream=callback(NS(returncode=0),NS(is_shutdown=False))
     nodes=[a.kwargs for a in downstream if 'executable' in a.kwargs]
@@ -362,7 +363,7 @@ def test_dryrun_downstream_uses_bounded_params_actual_frame_and_isolated_command
 
 
 def test_unverified_site_no_longer_blocks_startup_preflight(launching):
-    assert launching.configure({'mode':'dry_run','site':str(ROOT/'src/g1_nav_config/config/sensor_audit.yaml'),'map':''})
+    assert launching.configure({'mode':'sensor_check','site':str(ROOT/'src/g1_nav_config/config/sensor_audit.yaml'),'map':''})
 
 
 @pytest.mark.parametrize('over_budget', [True, False])

@@ -11,4 +11,8 @@ if [[ -n "${1:-}" && "$1" != *:=* ]]; then site_path="$(realpath "$1")"; shift; 
 args+=(site:="$site_path")
 if [[ -n "${1:-}" && "$1" != *:=* ]]; then args+=(map:="$(realpath "$1")"); shift; fi
 echo 'Stage3: legacy cleanup -> offset calibration -> direct projected odom TF -> scan -> SLAM/Nav2. LIVE default OFF.'
-exec ros2 launch g1_nav_bringup g1_nav_bringup.launch.py "${args[@]}" "$@"
+export G1_NAV_FAILURE_FILE="$ROOT/logs/launch-failure-$$.txt"
+status=0
+ros2 launch g1_nav_bringup g1_nav_bringup.launch.py "${args[@]}" "$@" || status=$?
+if [[ -f "$G1_NAV_FAILURE_FILE" ]]; then cat "$G1_NAV_FAILURE_FILE"; exit 2; fi
+exit "$status"
