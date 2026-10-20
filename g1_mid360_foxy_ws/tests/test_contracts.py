@@ -21,7 +21,7 @@ def site():
         s[key].update(verified=True, evidence_id='SYNTHETIC_TEST_ONLY')
     s['data_source'] = 'SYNTHETIC_TEST'
     s['calibration'].update(translation_xyz=[0., 0., 0.], quaternion_xyzw=[0., 0., 0., 1.])
-    s['filter'].update(min_height=.1, max_height=1.5, scan_time=.1)
+    s['filter'].update(ground_z=0., ground_margin=.05, min_height=.1, max_height=1.5, scan_time=.1)
     s['robot'].update(footprint_verified=True, safe_environment_confirmed=True, blind_spots_reviewed=True,
                       footprint=[[-.25, -.2], [.25, -.2], [.25, .2], [-.25, .2]])
     return s
@@ -35,6 +35,14 @@ def test_example_blocks():
 
 def test_synthetic_configuration(site):
     validate_site(site)
+
+
+def test_ground_below_body_origin_and_low_obstacle_retained(site):
+    site['filter'].update(ground_z=-.8, ground_margin=.03, min_height=-.75, max_height=1.)
+    validate_site(site)
+    f=site['filter']
+    assert not f['min_height'] <= -.8 <= f['max_height']
+    assert f['min_height'] <= -.7 <= f['max_height']
 
 
 @pytest.mark.parametrize('section', ['calibration', 'timing', 'filter'])

@@ -19,6 +19,7 @@ from nav2_msgs.action import ComputePathToPose, NavigateToPose
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from std_msgs.msg import String
 from slam_toolbox.srv import SerializePoseGraph
+from lifecycle_msgs.srv import GetState
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'logs/ros-integration';OUT.mkdir(parents=True,exist_ok=True)
@@ -28,7 +29,7 @@ site=yaml.safe_load((ROOT/'src/g1_nav_config/config/site.example.yaml').read_tex
 site['data_source']='SYNTHETIC_TEST'
 for key in ('calibration','timing','filter'):site[key].update(verified=True,evidence_id='SYNTHETIC_TEST_ONLY_NOT_HARDWARE')
 site['calibration'].update(translation_xyz=[0.,0.,0.],quaternion_xyzw=[0.,0.,0.,1.])
-site['filter'].update(min_height=.1,max_height=1.5,scan_time=.1)
+site['filter'].update(ground_z=-.5,ground_margin=.05,min_height=.1,max_height=1.5,scan_time=.1)
 site['robot'].update(footprint_verified=True,safe_environment_confirmed=True,blind_spots_reviewed=True,
     footprint=[[-.25,-.2],[.25,-.2],[.25,.2],[-.25,.2]])
 site_path=OUT/'synthetic-site.yaml';site_path.write_text(yaml.safe_dump(site))
@@ -90,24 +91,30 @@ try:
     nav=launch('navigation_dryrun',OUT/'synthetic-map.yaml')
     wait(lambda:health().get('healthy') is True,30)
     pose_pub=node.create_publisher(PoseWithCovarianceStamped,'/initialpose',10)
-    # This initial pose belongs only to the synthetic room fixture.
-    until=time.monotonic()+65
+    # Wait for AMCL lifecycle, then send a single fixture-specific initial pose.
+    state_client=node.create_client(GetState,'/amcl/get_state')
+    assert state_client.wait_for_service(timeout_sec=50)
+    until=time.monotonic()+30
     while time.monotonic()<until:
-        p=PoseWithCovarianceStamped();p.header.frame_id='map';p.header.stamp=node.get_clock().now().to_msg()
-        p.pose.pose.orientation.w=1.;p.pose.covariance[0]=.01;p.pose.covariance[7]=.01;p.pose.covariance[35]=.01
-        pose_pub.publish(p);rclpy.spin_once(node,timeout_sec=.2)
-        if 'costmap' in latest:break
+        state=state_client.call_async(GetState.Request());wait(lambda:state.done(),5)
+        if state.result().current_state.id==3:break
+    else:raise AssertionError('AMCL did not become active')
+    wait(lambda:'map' in latest,10)
+    p=PoseWithCovarianceStamped();p.header.frame_id='map';p.header.stamp=node.get_clock().now().to_msg()
+    p.pose.pose.orientation.w=1.;p.pose.covariance[0]=.05;p.pose.covariance[7]=.05;p.pose.covariance[35]=.05
+    pose_pub.publish(p)
+    wait(lambda:health().get('map_ready') is True,25)
     wait(lambda:'costmap' in latest,45);passed('map_reloaded_amcl_and_costmap_active')
     planner=ActionClient(node,ComputePathToPose,'/compute_path_to_pose')
     assert planner.wait_for_server(timeout_sec=30)
-    goal=ComputePathToPose.Goal();goal.goal.header.frame_id='map';goal.goal.header.stamp=node.get_clock().now().to_msg()
-    goal.goal.pose.position.x=1.;goal.goal.pose.orientation.w=1.;goal.planner_id='GridBased'
+    goal=ComputePathToPose.Goal();goal.pose.header.frame_id='map';goal.pose.header.stamp=node.get_clock().now().to_msg()
+    goal.pose.pose.position.x=1.;goal.pose.pose.orientation.w=1.;goal.planner_id='GridBased'
     sent=planner.send_goal_async(goal);wait(lambda:sent.done(),15)
     assert sent.result().accepted
     result=sent.result().get_result_async();wait(lambda:result.done(),30)
     assert len(result.result().result.path.poses)>2;passed('navfn_real_action_nonempty_path')
     navigator=ActionClient(node,NavigateToPose,'/navigate_to_pose');assert navigator.wait_for_server(timeout_sec=10)
-    ng=NavigateToPose.Goal();ng.pose=goal.goal
+    ng=NavigateToPose.Goal();ng.pose=goal.pose
     nf=navigator.send_goal_async(ng);wait(lambda:nf.done(),10);assert nf.result().accepted
     wait(lambda:'cmd' in latest and abs(latest['cmd'].linear.x)>0,30);passed('dwb_generates_cmd_vel_without_sdk')
     wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')

@@ -52,9 +52,11 @@ def validate_site(site, full=True):
     if len(c['translation_xyz']) != 3 or not finite(c['translation_xyz']):
         raise Blocked('unknown sensor translation')
     quaternion(c['quaternion_xyzw'])
-    if not finite([f['min_height'], f['max_height'], f['scan_time'], f['range_min'], f['range_max'], f['angle_increment']]):
+    if not finite([f['ground_z'], f['ground_margin'], f['min_height'], f['max_height'], f['scan_time'], f['range_min'], f['range_max'], f['angle_increment']]):
         raise Blocked('unknown scan filter/frequency')
-    if not (0 < f['min_height'] < f['max_height'] <= 3 and .08 <= f['scan_time'] <= .2
+    if not (-3 <= f['ground_z'] <= 1 and .01 <= f['ground_margin'] <= .2
+            and -3 <= f['min_height'] < f['max_height'] <= 3
+            and f['min_height'] >= f['ground_z']+f['ground_margin'] and .08 <= f['scan_time'] <= .2
             and 0 < f['range_min'] < f['range_max'] <= 20 and 0 < f['angle_increment'] <= .05):
         raise Blocked('invalid height/range/scan filter')
     r = site['robot']

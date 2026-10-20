@@ -22,6 +22,8 @@ timing:
 filter:
   verified: false
   evidence_id: ''
+  ground_z: null
+  ground_margin: null
   min_height: null
   max_height: null
   scan_time: null

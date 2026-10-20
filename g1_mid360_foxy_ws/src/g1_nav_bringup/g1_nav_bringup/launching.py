@@ -77,8 +77,13 @@ def configure(context):
     nav = yaml.safe_load(Path(share('g1_nav_config', 'config', 'nav2.yaml')).read_text())
     for cm in ('local_costmap', 'global_costmap'):
         nav[cm][cm]['ros__parameters']['footprint'] = json.dumps(site['robot']['footprint'])
-        nav[cm][cm]['ros__parameters']['obstacle_layer']['cloud']['min_obstacle_height'] = float(site['filter']['min_height'])
-        nav[cm][cm]['ros__parameters']['obstacle_layer']['cloud']['max_obstacle_height'] = float(site['filter']['max_height'])
+        # Actual crop is in calibrated robot coordinates. ObstacleLayer's second
+        # height filter runs in odom/map and must not reuse body-frame heights.
+        layer = nav[cm][cm]['ros__parameters']['obstacle_layer']
+        layer['max_obstacle_height'] = 10.0
+        for source in ('scan', 'cloud'):
+            layer[source]['min_obstacle_height'] = -10.0
+            layer[source]['max_obstacle_height'] = 10.0
     nav['bt_navigator']['ros__parameters']['default_bt_xml_filename'] = share('g1_nav_config', 'behavior_trees', 'navigate.xml')
     nav['map_server']['ros__parameters']['yaml_filename'] = map_path
     handle, generated = tempfile.mkstemp(prefix='g1_nav_', suffix='.yaml')
