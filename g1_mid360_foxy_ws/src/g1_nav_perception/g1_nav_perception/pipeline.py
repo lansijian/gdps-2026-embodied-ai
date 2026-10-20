@@ -44,6 +44,7 @@ class Pipeline(Node):
         self.streams = {k: Stream(t['max_age_s'], t['max_future_s'], t['jump_s'])
                         for k in ('cloud', 'odom', 'imu', 'scan')}
         self.started = time.monotonic()
+        self.last_odom_publish = 0.
         self.frame_errors = {}
         self.edges = {}
         self.tf_conflict = ''
@@ -121,8 +122,11 @@ class Pipeline(Node):
         except Blocked as exc:
             self.frame_errors['odom'] = str(exc)
             return
-        if ok and self.site['timing']['verified']:
+        # Audit every raw sample but bound ROS TF/normalized odom load to <=50 Hz.
+        now = time.monotonic()
+        if ok and self.site['timing']['verified'] and now-self.last_odom_publish >= .02:
             self.odom_pub.publish(msg)
+            self.last_odom_publish = now
 
     def imu(self, msg):
         # IMU is audited and preserved; no unverified frame conversion or fusion.
@@ -187,7 +191,15 @@ class Pipeline(Node):
             age = time.time()-stamp_seconds(tf.header.stamp)
             if not -self.site['timing']['max_future_s'] <= age <= self.site['timing']['max_age_s']:
                 reasons.append('TF_STALE_OR_FUTURE')
-            self.buffer.lookup_transform('robot_center', 'livox_frame', Time())
+            sensor_tf = self.buffer.lookup_transform('robot_center', 'livox_frame', Time())
+            if self.calibrated:
+                c = self.site['calibration']
+                p = sensor_tf.transform.translation
+                q = sensor_tf.transform.rotation
+                actual_q = (q.x, q.y, q.z, q.w)
+                dot = abs(sum(a*b for a, b in zip(actual_q, c['quaternion_xyzw'])))
+                if max(abs(a-b) for a, b in zip((p.x, p.y, p.z), c['translation_xyz'])) > .001 or abs(dot-1.) > .001:
+                    reasons.append('TF_CALIBRATION_MISMATCH')
         except Exception:
             reasons.append('TF_LOOKUP_FAILED')
         if self.scan_ratio < self.site['diagnostics']['minimum_scan_finite_ratio']:

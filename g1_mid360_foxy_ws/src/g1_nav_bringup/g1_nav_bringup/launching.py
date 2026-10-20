@@ -99,8 +99,11 @@ def configure(context):
             nodes = [('nav2_controller', 'controller_server'), ('nav2_planner', 'planner_server'),
                      ('nav2_recoveries', 'recoveries_server'), ('nav2_bt_navigator', 'bt_navigator')]
             for pkg, exe in nodes:
+                remaps = [('odom', '/g1_nav/odom')]
+                if exe == 'recoveries_server':
+                    remaps.append(('cmd_vel', '/g1_nav/recovery_cmd_vel_disabled'))
                 downstream.append(Node(package=pkg, executable=exe, name=exe, output='screen',
-                                       parameters=[generated], remappings=[('odom', '/g1_nav/odom')]))
+                                       parameters=[generated], remappings=remaps))
             downstream.append(Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
                 name='lifecycle_manager_navigation', output='screen', parameters=[{'use_sim_time': False,
                     'autostart': True, 'node_names': [n for _, n in nodes]}]))

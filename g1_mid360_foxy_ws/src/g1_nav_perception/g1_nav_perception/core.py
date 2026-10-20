@@ -2,6 +2,7 @@
 import math
 import statistics
 import struct
+from collections import deque
 
 
 class Blocked(ValueError):
@@ -75,7 +76,7 @@ class Stream:
     def __init__(self, age=.3, future=.03, jump=.2):
         self.age, self.future, self.jump = age, future, jump
         self.last_stamp = self.last_recv = None
-        self.samples = []
+        self.samples = deque(maxlen=100000)
         self.reason = 'NO_DATA'
         self.out_of_order = self.jumps = self.invalid = 0
 
@@ -98,7 +99,8 @@ class Stream:
         self.reason = reason
         self.invalid += bool(reason)
         self.samples.append((monotonic, realtime-stamp, bool(reason)))
-        self.samples = [s for s in self.samples if monotonic-s[0] <= 30]
+        while self.samples and monotonic-self.samples[0][0] > 30:
+            self.samples.popleft()
         return not reason
 
     def healthy(self, now, timeout=.4):

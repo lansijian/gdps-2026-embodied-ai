@@ -89,6 +89,16 @@ def test_clock_jump_order_timeout_and_recovery():
     assert s.report()['invalid']==2
 
 
+def test_stream_window_is_bounded_and_reports_measured_frequency():
+    s=Stream()
+    for i in range(32000):
+        assert s.observe(100+i*.001,100.01+i*.001,1+i*.001)
+    report=s.report()
+    assert len(s.samples)<=30001
+    assert report['hz']==pytest.approx(1000.,rel=.001)
+    assert report['offset_p95_s']==pytest.approx(.01)
+
+
 @pytest.mark.parametrize('big,datatype', [(False,7),(True,7),(False,8),(True,8)])
 def test_organized_cloud_padding_and_endian(big, datatype):
     fmt=('>' if big else '<')+('fff' if datatype==7 else 'ddd')
