@@ -48,8 +48,9 @@ G1 正对约 1 m 的平墙站定，下方 angle 0 读数应约等于墙距 (≈1
 把外参从绕 Y 180° (lidar_qx:=0 lidar_qy:=1 lidar_qz:=0 lidar_qw:=0)
 切换为绕 X 180° (lidar_qx:=1 lidar_qy:=0 lidar_qz:=0 lidar_qw:=0) 后重测本脚本。
 TXT
-timeout 8 python3 - "$SCAN_TOPIC" <<'PY' || echo "NOTE: front-wall sample skipped (no scan or rclpy unavailable)"
+timeout 10 python3 - "$SCAN_TOPIC" <<'PY' || echo "NOTE: front-wall sample skipped (no scan or rclpy unavailable)"
 import math
+import statistics
 import sys
 import time
 
@@ -62,24 +63,34 @@ rclpy.init()
 node = rclpy.create_node('front_wall_check')
 samples = []
 node.create_subscription(LaserScan, topic, samples.append, qos_profile_sensor_data)
-deadline = time.monotonic() + 6.0
-while not samples and time.monotonic() < deadline:
+deadline = time.monotonic() + 8.0
+while len(samples) < 10 and time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=0.2)
-if samples:
-    msg = samples[0]
-
-    def range_at(angle):
-        index = int((angle - msg.angle_min) / msg.angle_increment)
-        if 0 <= index < len(msg.ranges):
-            return msg.ranges[index]
-        return float('nan')
-
-    print('angle 0  range: %.3f m (the front wall should appear here)' % range_at(0.0))
-    print('angle pi range: %.3f m' % range_at(math.pi))
-else:
-    print('no scan sample within timeout')
 node.destroy_node()
 rclpy.shutdown()
+
+
+def window_values(msg, angle):
+    center = int(round((angle - msg.angle_min) / msg.angle_increment))
+    center = max(0, min(len(msg.ranges) - 1, center))
+    lo = max(0, center - 2)
+    hi = min(len(msg.ranges), center + 3)
+    return [r for r in msg.ranges[lo:hi] if math.isfinite(r)]
+
+
+if not samples:
+    print('no scan sample within timeout')
+for label, angle in (('angle 0 ', 0.0), ('angle pi', math.pi)):
+    per_frame = []
+    for msg in samples[:10]:
+        values = window_values(msg, angle)
+        if values:
+            per_frame.append(statistics.median(values))
+    if per_frame:
+        print('%s: median %.3f m  min %.3f  max %.3f  (frames %d)' % (
+            label, statistics.median(per_frame), min(per_frame), max(per_frame), len(per_frame)))
+    elif samples:
+        print('%s: no finite rays in the center window' % label)
 PY
 
 echo

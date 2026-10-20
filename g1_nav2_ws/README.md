@@ -41,7 +41,10 @@ bash src/g1_nav_bringup/scripts/install_deps.sh
 source .deps/environment.bash
 python3 -m pip install --user --no-binary cyclonedds "cyclonedds==0.10.2"
 # 确认/安装 unitree_sdk2_python 到 /home/unitree/unitree_sdk2_python（优先用现场已验证目录；否则解压 scp 过来的 zip）：
-cd /home/unitree && unzip -o unitree_sdk2_python.zip   # 解压结果必须是 /home/unitree/unitree_sdk2_python
+cd /home/unitree && unzip -o unitree_sdk2_python.zip
+# 若解压得到 unitree_sdk2_python-master 或 unitree_sdk2_python-<commit>，必须改名：
+mv unitree_sdk2_python-master unitree_sdk2_python 2>/dev/null || mv unitree_sdk2_python-* unitree_sdk2_python
+test -f unitree_sdk2_python/unitree_sdk2py/core/channel.py   # 必须存在，否则停下来修路径，不要继续
 cd ~/g1_nav2_ws
 python3 -c "import cyclonedds; from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient; print('sdk imports OK')"
 colcon build --symlink-install
@@ -94,6 +97,10 @@ bash src/g1_nav_bringup/scripts/save_map.sh
 # 产出：~/g1_nav2_ws/maps/site.pgm + site.yaml（nav2_map_server）
 #       /home/unitree/maps/site_posegraph.posegraph（slam_toolbox 序列化图）
 ```
+
+序列化服务类型是 `slam_toolbox/srv/SerializePoseGraph`（任何旧写法 `slam_toolbox/srv/SerializeMap` 一律作废），服务名 `/slam_toolbox/serialize_map`；最终以机上 `ros2 service type /slam_toolbox/serialize_map` 实测为准。
+
+调参闸（顺序不可颠倒）：只有 check_stack 正墙、TF、`/odom` 全干净后，若建图仍稀疏/分段，才允许把 slam_toolbox 的 `minimum_time_interval` / `minimum_travel_distance` / `minimum_travel_heading` 从 0.5 调到 0.2，`map_update_interval` 从 5.0 调到 2.0；**禁止**先动 `use_scan_matching` / correlative / loop closing 参数。
 
 ## 6. dry-run 完整导航（继续建图模式）
 
