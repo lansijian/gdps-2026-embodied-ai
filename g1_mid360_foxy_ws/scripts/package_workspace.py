@@ -14,7 +14,11 @@ for path in root.rglob('*'):
     rel = path.relative_to(root)
     if any(part in {'external', 'external_sources', 'logs', 'build', 'install', 'log', '__pycache__', '.pytest_cache', '.git'} for part in rel.parts):
         continue
-    if path.is_file() and not path.is_symlink() and path.name != 'site.yaml' and path != output and path.suffix not in ('.zip', '.gz', '.pyc'):
+    if len(rel.parts) > 1 and rel.parts[0] not in {'src', 'scripts', 'docs', 'tests', 'licenses'}:
+        continue
+    if (path.is_file() and not path.is_symlink() and path.name != 'site.yaml' and
+            not path.name.startswith('.env') and path != output and
+            path.suffix not in ('.zip', '.gz', '.pyc', '.bag', '.db3', '.mcap', '.pcd', '.log')):
         files.append(path)
 output.parent.mkdir(parents=True, exist_ok=True)
 manifest = {str(f.relative_to(root)).replace('\\', '/'): hashlib.sha256(f.read_bytes()).hexdigest() for f in files}

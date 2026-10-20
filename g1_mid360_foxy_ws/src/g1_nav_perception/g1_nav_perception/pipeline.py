@@ -82,7 +82,6 @@ class Pipeline(Node):
         ok = self.accept('cloud', msg, 'livox_frame')
         if not ok or not self.calibrated:
             return
-        self.cloud_pub.publish(msg)  # original stamp is preserved, never a fixed clock offset
         c, f = self.site['calibration'], self.site['filter']
         kept, finite_count, ground_count = [], 0, 0
         try:
@@ -97,6 +96,11 @@ class Pipeline(Node):
         except Blocked as exc:
             self.frame_errors['cloud'] = str(exc)
             return
+        age = time.time()-stamp_seconds(msg.header.stamp)
+        if not -self.site['timing']['max_future_s'] <= age <= self.site['timing']['max_age_s']:
+            self.frame_errors['cloud'] = 'CLOUD_PROCESSING_DELAY_OR_CLOCK_CHANGE'
+            return
+        self.cloud_pub.publish(msg)  # validated schema, original stamp, no fixed clock offset
         out = PointCloud2()
         out.header = copy.deepcopy(msg.header)
         out.header.frame_id = 'robot_center'

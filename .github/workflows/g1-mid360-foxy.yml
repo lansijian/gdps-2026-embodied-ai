@@ -34,7 +34,7 @@ jobs:
           source /opt/ros/foxy/setup.bash
           cd g1_mid360_foxy_ws
           mkdir -p logs
-          python3 -m pytest tests/test_contracts.py -q --junitxml=logs/contracts.xml
+          python3 -m pytest tests/test_contracts.py tests/test_scripts.py -q --junitxml=logs/contracts.xml
           colcon list --base-paths src
           colcon build --base-paths src --executor sequential --event-handlers console_direct+
           source install/setup.bash
