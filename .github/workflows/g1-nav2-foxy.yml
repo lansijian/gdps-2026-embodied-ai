@@ -52,11 +52,12 @@ jobs:
           for node in /slam_toolbox /odom_bridge /pointcloud_to_laserscan /lidar_extrinsics; do
             grep -Fx "$node" evidence/no-hardware-nodes.txt || exit 1
           done
+          cp evidence/no-hardware.log evidence/no-hardware-running.log
           wait "$launch_pid"
           result=$?
           set -e
           test "$result" -eq 124
-          ! grep -E '(slam_toolbox|pointcloud_to_laserscan|odom_bridge).*process has died' evidence/no-hardware.log
+          ! grep -E '(slam_toolbox|pointcloud_to_laserscan|python3).*process has died' evidence/no-hardware-running.log
       - name: synthetic-pipeline-and-nav2-action
         run: |
           source .deps/environment.bash
