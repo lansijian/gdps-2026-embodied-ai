@@ -91,4 +91,6 @@ bash scripts/save_map.sh /home/unitree/maps/site_20261020 --pose-graph
 
 保存 occupancy YAML/PGM 用于本工程 AMCL；posegraph/data 用于 SLAM Toolbox 后续继续建图，它们不是同一种文件，不能互换。本次定位选择 AMCL，不声称已实现 pose graph reload 定位。脚本拒绝覆盖已有地图。地图丢失时定位/导航必须失败。
 
+定位/导航退出前先运行 `ros2 run g1_nav_bringup shutdown`（纯定位加 `--localization-only`），通过 Nav2 lifecycle manager 完成去激活与清理，再 Ctrl-C。它只管理本项目的 Nav2 节点，不能作为真实机器人的紧急停止。
+
 回滚：Ctrl-C 停止本项目 launch，检查无残留本项目进程，再使用保留的旧工作空间。没有本工程 systemd 开机项，没有原厂服务修改，不需要卸载 SDK/驱动/ROS。日志和地图先保留，不执行破坏性清理。本轮没有向真实机器人复制或执行上述命令。

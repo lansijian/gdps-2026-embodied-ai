@@ -114,6 +114,9 @@ try:
     future=client.call_async(req);wait(lambda:future.done(),20)
     assert (OUT/'synthetic-posegraph.posegraph').is_file();passed('posegraph_saved')
     stop(mapping)
+    mapping_log=(OUT/'mapping.log').read_text(errors='replace')
+    assert 'process has died' not in mapping_log and 'received signal SIGSEGV' not in mapping_log,mapping_log[-6000:]
+    passed('slam_clean_process_shutdown')
     latest.clear();counts.clear()
     nav=launch('navigation_dryrun',OUT/'synthetic-map.yaml')
     wait(lambda:health().get('healthy') is True,30)
@@ -193,12 +196,12 @@ try:
     wait(lambda:json.loads(latest['observer'].data)['safe_preview']==[0.,0.,0.],5)
     passed('duplicate_tf_owner_latched_inhibit')
     passed('sdk_write_count_zero_all_ros_phases')
-    for manager in ('lifecycle_manager_navigation','lifecycle_manager_localization'):
-        client=node.create_client(ManageLifecycleNodes,'/'+manager+'/manage_nodes')
-        assert client.wait_for_service(timeout_sec=5)
-        request=ManageLifecycleNodes.Request();request.command=ManageLifecycleNodes.Request.SHUTDOWN
-        done=client.call_async(request);wait(lambda:done.done(),25);assert done.result().success
+    subprocess.run(['ros2','run','g1_nav_bringup','shutdown'],check=True,timeout=70)
     passed('nav2_orderly_lifecycle_shutdown')
+    stop(nav)
+    nav_log=(OUT/'navigation_dryrun.log').read_text(errors='replace')
+    assert 'process has died' not in nav_log,nav_log[-6000:]
+    passed('nav2_clean_process_shutdown')
 finally:
     (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
     (OUT/'last-health.json').write_text(json.dumps(health(),indent=2))

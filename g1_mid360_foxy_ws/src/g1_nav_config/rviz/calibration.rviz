@@ -1,0 +1,78 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+- Class: rviz_common/Tool Properties
+  Name: Tool Properties
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Background Color: 35; 35; 35
+    Fixed Frame: robot_center
+    Frame Rate: 15
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: Metric ground reference
+    Enabled: true
+    Cell Size: 0.5
+  - Class: rviz_default_plugins/TF
+    Name: TF axes
+    Enabled: true
+    Show Axes: true
+    Show Names: true
+  - Class: rviz_default_plugins/PointCloud2
+    Name: Original time-validated cloud
+    Enabled: true
+    Topic:
+      Value: /g1_nav/cloud_timed
+      Depth: 5
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+    Size (m): 0.02
+  - Class: rviz_default_plugins/PointCloud2
+    Name: Calibrated height-filtered obstacles
+    Enabled: true
+    Topic:
+      Value: /g1_nav/cloud_obstacles
+      Depth: 5
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+    Size (m): 0.03
+  - Class: rviz_default_plugins/LaserScan
+    Name: Official scan
+    Enabled: true
+    Topic:
+      Value: /scan
+      Depth: 5
+      History Policy: Keep Last
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+  - Class: rviz_default_plugins/Map
+    Name: Real map
+    Enabled: true
+    Topic:
+      Value: /map
+      Depth: 5
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Durability Policy: Transient Local
+  - Class: rviz_default_plugins/Path
+    Name: Navfn path
+    Enabled: true
+    Topic:
+      Value: /plan
+      Depth: 5
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Durability Policy: Volatile
+  Tools:
+  - Class: rviz_default_plugins/Interact
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/SetInitialPose
+    Topic: /initialpose
+  - Class: nav2_rviz_plugins/GoalTool
+Window Geometry:
+  Width: 1280
+  Height: 900

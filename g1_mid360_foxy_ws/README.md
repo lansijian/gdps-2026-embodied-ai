@@ -18,4 +18,4 @@ Data: factory cloud -> timestamp/frame gate -> cloud_timed -> official pointclou
 
 The pipeline keeps an active scan subscriber, emits /g1_nav/health and /diagnostics at 10 Hz, including frequency/offset P95, ordering/jumps, finite scan ratio, TF authority and cloud retention. The independent dry bridge's 20 Hz timer fails to zero on health/command timeout. There is no SDK worker that could block the timer. This does not implement the independent physical emergency stop needed for LIVE.
 
-Local tests: python -m pytest tests/test_contracts.py -q. Foxy integration: isolated ROS_DOMAIN_ID=87 G1_NAV_TEST_ONLY=1 python3 tests/ros_integration.py after building/sourcing; SYNTHETIC_TEST only. Never run fixtures in a robot domain.
+Local tests: python -m pytest tests/test_contracts.py tests/test_scripts.py -q. Foxy integration: isolated ROS_DOMAIN_ID=87 G1_NAV_TEST_ONLY=1 python3 tests/ros_integration.py after building/sourcing; SYNTHETIC_TEST only. Never run fixtures in a robot domain.

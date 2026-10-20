@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import yaml
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, EmitEvent, LogInfo
 from launch.event_handlers import OnProcessExit, OnShutdown
@@ -16,6 +16,20 @@ from g1_nav_perception.core import validate_site, Blocked
 
 def share(name, *parts):
     return str(Path(get_package_share_directory(name)).joinpath(*parts))
+
+
+def cyclone_process_environment():
+    # Foxy rclcpp nodes with shared_ptr cycles can retain DDS receive threads
+    # through process finalization. Pin the installed RMW in these processes so
+    # rmw_implementation's dlclose cannot unmap it under running DDS threads.
+    # No ROS/SDK files, DDS factory methods, or global environment are changed.
+    library = Path(get_package_prefix('rmw_cyclonedds_cpp'))/'lib/librmw_cyclonedds_cpp.so'
+    if not library.is_file():
+        raise Blocked('Installed CycloneDDS RMW library missing')
+    preload = str(library)
+    if os.environ.get('LD_PRELOAD'):
+        preload += ' '+os.environ['LD_PRELOAD']
+    return {'RMW_IMPLEMENTATION': 'rmw_cyclonedds_cpp', 'LD_PRELOAD': preload}
 
 
 def check_map(path, data_source='REAL_SENSOR'):
@@ -99,6 +113,7 @@ def configure(context):
                         "-ex run -ex 'thread apply all bt' --args") if os.environ.get('G1_NAV_DEBUG_SLAM') == '1' else ''
         downstream.append(Node(package='slam_toolbox', executable='async_slam_toolbox_node',
             prefix=debug_prefix,
+            additional_env=cyclone_process_environment(),
             name='slam_toolbox', output='screen', parameters=[share('g1_nav_config', 'config', 'slam.yaml'),
                 {'use_sim_time': False, 'max_laser_range': float(site['filter']['range_max'])}]))
     else:
@@ -115,7 +130,8 @@ def configure(context):
                 if exe == 'recoveries_server':
                     remaps.append(('cmd_vel', '/g1_nav/recovery_cmd_vel_disabled'))
                 downstream.append(Node(package=pkg, executable=exe, name=exe, output='screen',
-                                       parameters=[generated], remappings=remaps))
+                                       parameters=[generated], remappings=remaps,
+                                       additional_env=cyclone_process_environment() if exe == 'controller_server' else {}))
             downstream.append(Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
                 name='lifecycle_manager_navigation', output='screen', parameters=[{'use_sim_time': False,
                     'autostart': True, 'node_names': [n for _, n in nodes]}]))

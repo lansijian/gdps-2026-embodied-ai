@@ -12,3 +12,5 @@
 现场验收必须记录 `tf2_echo`、RViz 截图、地面高度/法向、已知物体坐标、单位、发布者 GID、真实时间戳。当前状态：**BLOCKED_NEEDS_CALIBRATION**。不得为了启动而填写 roll=π、pitch=π 或任意安装高度。
 
 robot_center 不假定在地面上。必须测量 filter.ground_z 与 ground_margin；min_height 可以是负值，但必须高于实测地板加留量。否则会漏掉身体原点下方的矮障碍。Nav2 ObservationBuffer 在 odom/map 中做二次高度筛选，因此不能照搬 robot_center 的高程窗口；本工程以已标定的机体点云预滤为准，代价地图仅保留 ±10m 的有限二次包络，不将其称为新的地面标定。
+
+标定用 `rviz2 -d "$(ros2 pkg prefix g1_nav_config)/share/g1_nav_config/rviz/calibration.rviz"`，固定 frame=robot_center。导航用 g1_nav.rviz，固定 frame=map；2D Pose Estimate 必须在 map 坐标系下设置。点云/scan 显示已明确采用 Best Effort；实际 GUI 显示仍待现场验证。
