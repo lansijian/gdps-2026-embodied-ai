@@ -15,7 +15,7 @@ The complete supplied specification is archived as EXECUTION_SPEC.md with SHA256
 | 10A local/CI | Windows contracts, baseline regressions, Python3.8/Foxy container build and ROS integration | x86_64 CI is not ARM64/robot evidence |
 | 10B-C sensor/TF | Health stats, TF GID monitor, clock audit, tf2_echo smoke | Real subscription/frequencies/ground/unique TF pending |
 | 10D map | Synthetic SLAM occupancy/posegraph save, AMCL occupancy reload harness | No real bag provided; real mapping/localization pending |
-| 10E dynamic/fault | Contract fault gates and ROS synthetic integration scenarios | DDS QoS mismatch and real negative obstacle detection not hardware-verified |
+| 10E dynamic/fault | Contract fault gates and ROS synthetic integration scenarios | QoS mismatch probe and real ROS faults tested synthetically; real negative obstacle detection not hardware-verified |
 | 10F bridge | Tripwire mock SDK calls zero; no SDK module imported in installed source | No LIVE transport or field authority |
 | 10G migration/Git | Source ZIP/tar manifests, feature commits pushed, PR body prepared | PR creation blocked by connector and repository Actions policy (403); no PR URL fabricated |
 | 11 delivery | README, deployment/calibration/time/safety/troubleshooting/verification docs, source archive and audit trail | Explicit pending items retained |

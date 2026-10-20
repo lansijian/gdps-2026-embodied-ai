@@ -1,0 +1,27 @@
+{
+  "code_commit": "7fcbe0c9d3d91d049baaa736c1f7d3c1bd62be7f",
+  "workflow_run": 39376281980,
+  "url": "https://github.com/lansijian/gdps-2026-embodied-ai/actions/runs/39376281980",
+  "data_source": "SYNTHETIC_TEST",
+  "architectures": [
+    {
+      "arch": "arm64",
+      "artifact_id": 12243855051,
+      "sha256": "16f595c8c5e5d1d34baf876987229a7980e7409c2f2d28f88646f0cf88efdf4f",
+      "ros_checks": 27
+    },
+    {
+      "arch": "x86_64",
+      "artifact_id": 12243875296,
+      "sha256": "a84125dc162bda0f6d3dbc66399cf13b8f0dd3c28b4b488defaf16840080e044",
+      "ros_checks": 27
+    }
+  ],
+  "contract_tests_each": 54,
+  "negative_launch_checks_each": 3,
+  "colcon_packages_each": 7,
+  "launch_entries_discovered_each": 5,
+  "live": "DISABLED",
+  "robot": "ROBOT_VERIFICATION_PENDING",
+  "pr": "NOT_CREATED_403"
+}

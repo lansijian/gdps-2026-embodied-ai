@@ -1,0 +1,141 @@
+{
+  "results": [
+    {
+      "test": "source_scan_tf_health",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "synthetic_20064_point_800hz_odom_200hz_imu_profile",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "incompatible_qos_probe_no_messages_pipeline_receives",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_toolbox_nonempty_map",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "occupancy_map_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "posegraph_saved",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "slam_clean_process_shutdown",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "map_reloaded_amcl_and_costmap_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "all_six_nav2_lifecycle_nodes_active",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "navfn_real_action_nonempty_path",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "dwb_generates_cmd_vel_without_sdk",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "no_generic_cmd_vel_output_to_existing_bridges",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "healthy_safe_preview",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_dynamic_obstacle",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "dynamic_obstacle_marked_in_local_costmap",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_cloud_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_odom_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_stale_time",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_future_time",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_wrong_frame",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "fault_stop_unsupported_layout",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "independent_timer_stop_tf_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "independent_timer_stop_health_heartbeat_loss",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "duplicate_tf_owner_latched_inhibit",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "sdk_write_count_zero_all_ros_phases",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "nav2_orderly_lifecycle_shutdown",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    },
+    {
+      "test": "nav2_clean_process_shutdown",
+      "status": "PASS",
+      "data_source": "SYNTHETIC_TEST"
+    }
+  ],
+  "live": "DISABLED",
+  "robot": "ROBOT_VERIFICATION_PENDING"
+}

@@ -1,6 +1,6 @@
 # G1 MID-360 / ROS 2 Foxy dry-run workspace
 
-Target: Ubuntu 20.04 ARM64, Python 3.8, ROS 2 Foxy, CycloneDDS. LIVE is DISABLED in code: no Unitree SDK import, DDS writer, FSM or motion service is installed. /g1_nav/cmd_vel_safe is a preview topic, never a hardware command.
+Target: Ubuntu 20.04 ARM64, Python 3.8, ROS 2 Foxy, CycloneDDS. LIVE is DISABLED in code: no Unitree SDK import, Unitree DDS motion writer, FSM or motion service is installed. /g1_nav/cmd_vel_safe is a preview topic, never a hardware command.
 
 Read docs/DEPLOY_FOXY_ARM64.md before use. Unknown calibration/timing/footprint/environment defaults block downstream. This is a navigation engineering candidate, not a hardware safety certification. Real robot validation is pending.
 

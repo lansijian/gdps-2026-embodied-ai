@@ -1,0 +1,79 @@
+{
+  "arch": "x86_64",
+  "source_commit": "7fcbe0c9d3d91d049baaa736c1f7d3c1bd62be7f",
+  "run_id": 39376281980,
+  "data_source": "SYNTHETIC_TEST",
+  "points": 20064,
+  "streams": {
+    "cloud": {
+      "count": 300,
+      "window_s": 29.900061897999876,
+      "hz": 9.999979298370656,
+      "offset_p50_s": 0.002316713333129883,
+      "offset_p95_s": 0.002602100372314453,
+      "offset_min_s": 0.0019192695617675781,
+      "offset_max_s": 0.003285646438598633,
+      "invalid_window": 0,
+      "out_of_order": 0,
+      "jumps": 0,
+      "invalid": 0,
+      "reason": ""
+    },
+    "odom": {
+      "count": 19708,
+      "window_s": 29.977575056999967,
+      "hz": 657.3913988215762,
+      "offset_p50_s": 0.00039315223693847656,
+      "offset_p95_s": 0.005136966705322266,
+      "offset_min_s": 0.0003349781036376953,
+      "offset_max_s": 0.0071485042572021484,
+      "invalid_window": 0,
+      "out_of_order": 0,
+      "jumps": 0,
+      "invalid": 0,
+      "reason": ""
+    },
+    "imu": {
+      "count": 5894,
+      "window_s": 29.974168200000122,
+      "hz": 196.60261998529708,
+      "offset_p50_s": 0.0006890296936035156,
+      "offset_p95_s": 0.0200960636138916,
+      "offset_min_s": 0.000396728515625,
+      "offset_max_s": 0.02592158317565918,
+      "invalid_window": 0,
+      "out_of_order": 0,
+      "jumps": 0,
+      "invalid": 0,
+      "reason": ""
+    },
+    "scan": {
+      "count": 301,
+      "window_s": 29.988495852000142,
+      "hz": 10.003836187068746,
+      "offset_p50_s": 0.023874759674072266,
+      "offset_p95_s": 0.03158926963806152,
+      "offset_min_s": 0.018585205078125,
+      "offset_max_s": 0.04488325119018555,
+      "invalid_window": 0,
+      "out_of_order": 0,
+      "jumps": 0,
+      "invalid": 0,
+      "reason": ""
+    }
+  },
+  "scan_finite_ratio": 0.9736111111111111,
+  "tf_edges": {
+    "robot_center": [
+      "odom",
+      "rclcpp_audited"
+    ],
+    "livox_frame": [
+      "robot_center",
+      "rclcpp_audited"
+    ]
+  },
+  "ros_checks": 27,
+  "artifact_id": 12243875296,
+  "artifact_sha256": "a84125dc162bda0f6d3dbc66399cf13b8f0dd3c28b4b488defaf16840080e044"
+}

@@ -12,6 +12,8 @@
 | TF_DUPLICATE_OWNER / TF_CONFLICT | Stop duplicate TF publisher, preserve logs, restart whole project; do not weaken monitor |
 | PUBLISHER_COUNT:/scan | Stop other project conversion nodes; do not restart factory Livox driver |
 | No /scan | Pipeline must accept cloud stamp/frame and verified geometry, TF lookup must work; pipeline itself supplies lazy scan demand |
+| EXISTING_ODOM_PARENT | Existing odom parent would conflict with this stack map->odom; review ownership, do not auto-stop factory SLAM |
+| UNSUPPORTED_FOXY_SCAN_LAYOUT | Audit original XYZ datatype/endian; official scan input is little-endian FLOAT32; do not forward an unverified layout |
 | PREFLIGHT_FAILED | Read latest health reasons and gate log; downstream deliberately never started |
 | AMCL not localized / costmap waits for map TF | Check real occupancy image and initial pose; use RViz 2D Pose Estimate; never publish static map->odom |
 | Zero safe preview while /cmd_vel exists | Check map_ready, health reasons, obstacle_stop, heartbeat, source publisher count and command bounds; LIVE remains disabled even if preview becomes nonzero |
