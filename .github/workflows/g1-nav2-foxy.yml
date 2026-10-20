@@ -33,6 +33,7 @@ jobs:
       - name: lint-no-gates
         run: |
           ! grep -rnE 'RESTART_REQUIRED|BLOCKED_|latch|smoke|verified|ReceiptClock|robot_center' src/
+          ! grep -rnwE 'health|gate|watchdog|state_machine' src/
           python3 -m compileall -q src tests
       - name: config-and-launch-wiring
         run: python3 tests/test_config.py

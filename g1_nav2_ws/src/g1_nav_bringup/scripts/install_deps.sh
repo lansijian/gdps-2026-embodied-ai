@@ -142,16 +142,21 @@ ENV
 
 if [[ "$CI_MODE" != --ci ]]; then
   # Robot deployment never pip-installs SDK python packages here; only check imports
-  # and print the exact README section-2 fix commands on failure.
+  # (with the freshly written single-CycloneDDS environment) and print the exact
+  # README section-2 fix commands on failure.
+  set +u
+  source "$DEPS/environment.bash"
+  set -u
   if ! python3 -c 'import cyclonedds' 2> /dev/null; then
-    echo 'cyclonedds python binding missing. Fix (README section 2): python3 -m pip install --user "cyclonedds==0.10.2"' >&2
+    echo 'cyclonedds python binding missing. Fix (README section 2, after sourcing .deps/environment.bash): python3 -m pip install --user --no-binary cyclonedds "cyclonedds==0.10.2"' >&2
   fi
-  if ! PYTHONPATH="/home/unitree/unitree_sdk2_python:${PYTHONPATH:-}" python3 -c 'import unitree_sdk2py' 2> /dev/null; then
+  if ! python3 -c 'from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient' 2> /dev/null; then
     cat >&2 <<'FIX'
-unitree_sdk2py missing. Fix (README section 2):
-  cd /home/unitree
-  git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
-  git -C unitree_sdk2_python checkout 814556d15970dd2ecf1c9984e845ca02ab07e206
+unitree_sdk2py LocoClient import missing. Fix (README section 2; robot deployment does not git clone):
+  Prefer the field-proven copy if present: ls /home/unitree/unitree_sdk2_python/unitree_sdk2py
+  Otherwise unzip the Windows-scp'd SDK archive:
+    cd /home/unitree && unzip -o unitree_sdk2_python.zip
+    # result must be /home/unitree/unitree_sdk2_python (already on PYTHONPATH via environment.bash)
 FIX
   fi
 fi
