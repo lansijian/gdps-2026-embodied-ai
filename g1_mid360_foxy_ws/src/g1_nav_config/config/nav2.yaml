@@ -288,8 +288,3 @@ waypoint_follower:
     use_sim_time: false
     loop_rate: 10
     stop_on_failure: true
-    waypoint_task_executor_plugin: wait_at_waypoint
-    wait_at_waypoint:
-      plugin: nav2_waypoint_follower::WaitAtWaypoint
-      enabled: true
-      waypoint_pause_duration: 0

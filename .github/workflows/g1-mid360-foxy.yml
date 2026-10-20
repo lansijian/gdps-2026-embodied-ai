@@ -22,12 +22,13 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-22.04, ubuntu-24.04-arm]
+        rmw: [rmw_cyclonedds_cpp, rmw_fastrtps_cpp]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     container: ros:foxy-ros-base-focal@sha256:34fbe32f5b1cd3eb25f6becaaa1d293bad754d64c31d96e638e4b30ed82f9f8e
     env:
       ROS_DOMAIN_ID: '87'
-      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      RMW_IMPLEMENTATION: ${{ matrix.rmw }}
       G1_NAV_TEST_ONLY: '1'
       G1_NAV_DEBUG_SLAM: '0'
       G1_NAV_LOAD_TEST: '1'
@@ -40,7 +41,7 @@ jobs:
       - name: Install Foxy test dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends gdb python3-pytest python3-yaml python3-colcon-common-extensions ros-foxy-rmw-cyclonedds-cpp ros-foxy-navigation2 ros-foxy-nav2-bringup ros-foxy-slam-toolbox ros-foxy-pointcloud-to-laserscan ros-foxy-diagnostic-msgs
+          apt-get install -y --no-install-recommends gdb python3-pytest python3-yaml python3-colcon-common-extensions ros-foxy-rmw-cyclonedds-cpp ros-foxy-rmw-fastrtps-cpp ros-foxy-navigation2 ros-foxy-nav2-bringup ros-foxy-slam-toolbox ros-foxy-pointcloud-to-laserscan ros-foxy-diagnostic-msgs
       - name: Contract tests and colcon build on Python 3.8
         run: |
           source /opt/ros/foxy/setup.bash
@@ -65,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: foxy-synthetic-evidence-${{ matrix.runner }}
+          name: foxy-synthetic-evidence-${{ matrix.runner }}-${{ matrix.rmw }}
           path: |
             g1_mid360_foxy_ws/logs/
             g1_mid360_foxy_ws/log/

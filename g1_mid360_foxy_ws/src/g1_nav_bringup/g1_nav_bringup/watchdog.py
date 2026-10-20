@@ -63,7 +63,7 @@ class Watchdog(Node):
             self.health.publish(message)
         with self.log.open('a') as stream:stream.write(json.dumps(report)+'\n')
         for row in rows:
-            if row['rss_kib']>4*1024*1024 and row['pid']!=os.getpid():
+            if row['rss_kib']>4*1024*1024:
                 try:os.kill(row['pid'],signal.SIGTERM)
                 except ProcessLookupError:pass
 

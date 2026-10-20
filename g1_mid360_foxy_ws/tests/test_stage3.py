@@ -206,6 +206,19 @@ def test_stamped_bridge_rejects_other_frame_and_old_commands(bridge_module,monke
     monkeypatch.setattr(module,'time',NS(time=lambda:1000.,monotonic=lambda:10.))
     node.command(NS(header=NS(frame_id='map',stamp=NS(sec=1000,nanosec=0))))
     assert node.gate.last_cmd is None
+
     node.gate.last_cmd='old'
     node.command(NS(header=NS(frame_id='robot_center',stamp=NS(sec=999,nanosec=0))))
     assert node.gate.last_cmd is None
+
+
+def test_motion_lock_is_held_until_pending_sdk_call_finishes(bridge_module,monkeypatch):
+    module=bridge_module;node=module.Bridge.__new__(module.Bridge);released=[];callbacks=[]
+    node.sdk_pool=NS(shutdown=lambda **kw:None);node.permit_rpc=True
+    node.future=NS(done=lambda:False,add_done_callback=lambda cb:callbacks.append(cb))
+    node.lock=NS(release=lambda:released.append(True))
+    monkeypatch.setattr(module.Node,'destroy_node',lambda self:None,raising=False)
+    node.destroy_node()
+    assert not released
+    callbacks[0](None)
+    assert released==[True]

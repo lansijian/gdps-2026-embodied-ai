@@ -87,7 +87,12 @@ class Bridge(Node):
         # Every SDK command has a short finite lease. No action/FSM API is called on exit.
         self.permit_rpc=False
         if self.sdk_pool:self.sdk_pool.shutdown(wait=False)
-        self.lock.release();super().destroy_node()
+        pending=getattr(self,'future',None)
+        if pending is not None and not pending.done():
+            # Retain exclusive ownership until a delayed SDK call is finished.
+            pending.add_done_callback(lambda _:self.lock.release())
+        else:self.lock.release()
+        super().destroy_node()
 
 
 def main(args=None):

@@ -29,7 +29,9 @@ class Waypoints(Node):
         self.declare_parameter('waypoints_file','');self.declare_parameter('loop',False)
         self.declare_parameter('report_file',str(Path.home()/'.ros/g1_nav-waypoints.json'))
         self.points=read_waypoints(self.get_parameter('waypoints_file').value)
-        self.client=ActionClient(self,FollowWaypoints,'/follow_waypoints')
+        self.declare_parameter('action_name','/FollowWaypoints')
+        self.client=ActionClient(self,FollowWaypoints,self.get_parameter('action_name').value)
+        self.get_logger().info('WAYPOINT_SERVER_WAIT action='+self.get_parameter('action_name').value)
         self.active=None;self.pending=False;self.rounds=[];self.done=False;self.started=time.monotonic()
         self.create_timer(1.,self.tick)
     def tick(self):
@@ -60,6 +62,7 @@ class Waypoints(Node):
         path.write_text(json.dumps(payload,indent=2));self.get_logger().info('WAYPOINT_REPORT '+json.dumps(payload))
     def destroy_node(self):
         if self.active:self.active.cancel_goal_async()
+        self.client.destroy()
         super().destroy_node()
 
 

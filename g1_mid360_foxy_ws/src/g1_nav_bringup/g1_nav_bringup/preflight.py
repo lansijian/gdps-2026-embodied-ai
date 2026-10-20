@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import subprocess
 import time
 import rclpy
 from rclpy.node import Node
@@ -41,11 +42,30 @@ def candidates():
     for entry in Path('/proc').glob('[0-9]*'):
         try:
             pid=int(entry.name)
-            if pid in excluded or entry.stat().st_uid!=os.getuid():continue
+            if pid in excluded:continue
             argv=[a.decode(errors='replace') for a in (entry/'cmdline').read_bytes().split(b'\0') if a]
-            if legacy_command(argv):found.append({'pid':pid,'argv':argv})
+            if legacy_command(argv):found.append({'pid':pid,'uid':entry.stat().st_uid,'argv':argv})
         except (OSError,ValueError):continue
     return found
+
+
+def signal_navigation(item, sig):
+    try:
+        current=[a.decode(errors='replace') for a in Path('/proc/%d/cmdline'%item['pid']).read_bytes().split(b'\0') if a]
+        if current != item['argv'] or not legacy_command(current):
+            return 'PID_CHANGED_NO_KILL:'+str(item['pid'])
+        try:os.kill(item['pid'],sig)
+        except PermissionError:
+            # Explicit cleanup authorization applies to these named navigation PIDs only.
+            # Never request an interactive password or stop/modify a service.
+            result=subprocess.run(['/usr/bin/sudo','-n','/bin/kill','-'+signal.Signals(sig).name,str(item['pid'])],
+                                  stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=3)
+            if result.returncode:
+                return 'LEGACY_PERMISSION_DENIED pid=%d uid=%s: %s'%(item['pid'],item.get('uid'),result.stdout.strip())
+    except ProcessLookupError:pass
+    except FileNotFoundError:pass
+    except (OSError,subprocess.SubprocessError) as exc:return 'LEGACY_STOP_FAILED:'+str(exc)
+    return ''
 
 
 def main(args=None):
@@ -53,19 +73,19 @@ def main(args=None):
     parser.add_argument('--check-only',action='store_true',help='this executable always checks/cleans only')
     from rclpy.utilities import remove_ros_args
     options=parser.parse_args(remove_ros_args(args=args)[1:])
-    old=candidates()
+    old=candidates();stop_errors=[]
     print('LEGACY_PREFLIGHT '+json.dumps(old),flush=True)
     if old:print('WARN legacy navigation detected; '+('retaining by request' if options.keep_legacy else 'terminating only listed navigation processes'),flush=True)
     if not options.keep_legacy:
         # Stop ROS launch supervisors first to prevent respawning their children.
         for item in sorted(old,key=lambda x:0 if 'launch' in x['argv'] else 1):
-            try:os.kill(item['pid'],signal.SIGINT)
-            except ProcessLookupError:pass
+            reason=signal_navigation(item,signal.SIGINT)
+            if reason:stop_errors.append(reason);print('WARN '+reason,flush=True)
         deadline=time.monotonic()+5
         while time.monotonic()<deadline and candidates():time.sleep(.2)
         for item in candidates():
-            try:os.kill(item['pid'],signal.SIGTERM)
-            except ProcessLookupError:pass
+            reason=signal_navigation(item,signal.SIGTERM)
+            if reason:stop_errors.append(reason);print('WARN '+reason,flush=True)
         time.sleep(.5)
     rclpy.init(args=[]);node=Node('g1_nav_legacy_preflight')
     edges={};errors=[]
@@ -84,6 +104,7 @@ def main(args=None):
     remaining=candidates()
     if scan:errors.append('EXISTING_SCAN_PUBLISHERS:'+str(scan))
     if remaining and not options.keep_legacy:errors.append('LEGACY_RESPAWN_OR_STOP_FAILED')
+    if remaining:errors.extend(stop_errors)
     report={'remaining':remaining,'scan_publishers':scan,'tf_edges':edges,'errors':sorted(set(errors))}
     print('PREFLIGHT_RESULT '+json.dumps(report),flush=True)
     node.destroy_node();rclpy.shutdown()
