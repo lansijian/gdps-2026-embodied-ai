@@ -10,6 +10,7 @@ import yaml
 from g1_nav_perception.core import (Blocked, validate_site, Stream, rotate, points_xyz, DryGate)
 from g1_nav_bridge.motion_lock import MotionLock, MotionLockError
 from g1_ros2_bridge.joint_names import JOINT_NAMES
+from g1_nav_perception.cloud import crop
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -115,6 +116,13 @@ def test_organized_cloud_padding_and_endian(big, datatype):
         data=struct.pack(fmt,1,2,3)+b'PAD!'+struct.pack(fmt,4,5,6)+b'PAD!',
         height=2,width=1,point_step=size,row_step=size+4,is_bigendian=big)
     assert list(points_xyz(msg))==[[1.,2.,3.],[4.,5.,6.]]
+    data,width,stats=crop(msg,[0.,0.,.6],[1.,0.,0.,0.],-6.,4.)
+    expected=[]
+    for point in points_xyz(msg):
+        v=rotate([1.,0.,0.,0.],point)
+        expected.extend((v[0],v[1],v[2]+.6))
+    assert struct.unpack('<ffffff',data)==pytest.approx(expected)
+    assert width==stats['retained']==2 and stats['finite_points']==2
     msg.data=b''
     with pytest.raises(Blocked):list(points_xyz(msg))
 

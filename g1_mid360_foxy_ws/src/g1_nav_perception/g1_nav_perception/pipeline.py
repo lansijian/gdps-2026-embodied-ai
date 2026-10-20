@@ -18,6 +18,7 @@ from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer, TransformListener
 from rclpy.time import Time
 from .core import Stream, Blocked, finite, quaternion, rotate, points_xyz, stamp_seconds, validate_site
+from .cloud import crop
 
 
 def load_site(node):
@@ -83,16 +84,8 @@ class Pipeline(Node):
         if not ok or not self.calibrated:
             return
         c, f = self.site['calibration'], self.site['filter']
-        kept, finite_count, ground_count = [], 0, 0
         try:
-            for p in points_xyz(msg):
-                finite_count += 1
-                v = rotate(c['quaternion_xyzw'], p)
-                v = tuple(v[i]+c['translation_xyz'][i] for i in range(3))
-                if v[2] < f['min_height']:
-                    ground_count += 1
-                if f['min_height'] <= v[2] <= f['max_height']:
-                    kept.append(v)
+            data, width, stats = crop(msg, c['translation_xyz'], c['quaternion_xyzw'], f['min_height'], f['max_height'])
         except Blocked as exc:
             self.frame_errors['cloud'] = str(exc)
             return
@@ -104,17 +97,14 @@ class Pipeline(Node):
         out = PointCloud2()
         out.header = copy.deepcopy(msg.header)
         out.header.frame_id = 'robot_center'
-        out.height, out.width, out.point_step = 1, len(kept), 12
+        out.height, out.width, out.point_step = 1, width, 12
         out.row_step = out.width*12
         out.is_dense = True
         out.fields = [PointField(name=n, offset=i*4, datatype=PointField.FLOAT32, count=1)
                       for i, n in enumerate(('x', 'y', 'z'))]
-        out.data = b''.join(struct.pack('<fff', *v) for v in kept)
+        out.data = data
         self.obstacles.publish(out)
-        self.filter_stats = {'finite_points': finite_count, 'retained': len(kept),
-                             'below_height': ground_count,
-                             'retention_ratio': len(kept)/max(1, finite_count),
-                             'ground_candidate_ratio': ground_count/max(1, finite_count)}
+        self.filter_stats = stats
 
     def odom(self, msg):
         ok = self.accept('odom', msg, 'odom')

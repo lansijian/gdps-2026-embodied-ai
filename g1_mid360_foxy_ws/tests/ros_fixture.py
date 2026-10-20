@@ -1,5 +1,6 @@
 """SYNTHETIC_TEST ONLY. Wall-time geometric room; never imports a G1 SDK."""
 import json
+import os
 import math
 import struct
 import time
@@ -15,12 +16,13 @@ class Fixture(Node):
     def __init__(self, fault_path):
         super().__init__('SYNTHETIC_TEST_sensor_fixture')
         self.fault_path = Path(fault_path)
+        self.load_test = os.environ.get('G1_NAV_LOAD_TEST') == '1'
         self.cloud = self.create_publisher(PointCloud2, '/utlidar/cloud_livox_mid360', qos_profile_sensor_data)
         self.odom = self.create_publisher(Odometry, '/dog_odom', qos_profile_sensor_data)
         self.imu = self.create_publisher(Imu, '/utlidar/imu_livox_mid360', qos_profile_sensor_data)
         self.create_timer(.1, self.points)
-        self.create_timer(.02, self.pose)
-        self.create_timer(.01, self.inertial)
+        self.create_timer(.00125 if self.load_test else .02, self.pose)
+        self.create_timer(.005 if self.load_test else .01, self.inertial)
 
     def fault(self):
         try:
@@ -49,10 +51,13 @@ class Fixture(Node):
             pts.append((distance*.5*c, distance*.5*s, -.5))
         if fault == 'dynamic_obstacle':
             pts.extend((.45, -.2+i*.01, .3) for i in range(41))
+        if self.load_test:
+            # Repeated SYNTHETIC geometry tests processing load, not real coverage.
+            pts=[pts[i%len(pts)] for i in range(20064)]
         m=PointCloud2();m.header.frame_id='wrong_sensor' if fault=='wrong_frame' else 'livox_frame'
-        m.header.stamp=self.stamp();m.height=1;m.width=len(pts);m.point_step=12;m.row_step=len(pts)*12
+        m.header.stamp=self.stamp();m.height=1;m.width=len(pts);m.point_step=32 if self.load_test else 12;m.row_step=len(pts)*m.point_step
         m.fields=[PointField(name=n,offset=i*4,datatype=PointField.FLOAT32,count=1) for i,n in enumerate('xyz')]
-        m.is_dense=True;m.data=b''.join(struct.pack('<fff',*p) for p in pts)
+        m.is_dense=True;m.data=b''.join(struct.pack('<fff',*p)+(b'\0'*20 if self.load_test else b'') for p in pts)
         self.cloud.publish(m)
 
     def pose(self):

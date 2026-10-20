@@ -102,6 +102,9 @@ try:
     fixture=start('fixture',[sys.executable,str(ROOT/'tests/ros_fixture.py'),str(fault)])
     mapping=launch('mapping')
     wait(lambda: health().get('healthy') is True,30);passed('source_scan_tf_health')
+    if os.environ.get('G1_NAV_LOAD_TEST')=='1':
+        assert health()['filter']['finite_points']==20064
+        passed('synthetic_20064_point_800hz_odom_200hz_imu_profile')
     assert counts.get('incompatible_qos',0)==0;passed('incompatible_qos_probe_no_messages_pipeline_receives')
     wait(lambda:'map' in latest and latest['map'].info.width>0 and any(x>=0 for x in latest['map'].data),100)
     passed('slam_toolbox_nonempty_map')
