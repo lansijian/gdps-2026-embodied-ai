@@ -6,7 +6,7 @@ import tempfile
 import yaml
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, EmitEvent, LogInfo, SetEnvironmentVariable, RaiseError
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, EmitEvent, LogInfo, SetEnvironmentVariable
 from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
@@ -56,6 +56,14 @@ def check_map(path, data_source='REAL_SENSOR'):
     return str(p.resolve())
 
 
+def failure(message):
+    # Foxy has no launch.actions.RaiseError. An OpaqueFunction exception is
+    # propagated by the launch service and yields a nonzero CLI exit status.
+    def fail(context):
+        raise RuntimeError(message)
+    return OpaqueFunction(function=fail)
+
+
 def truth(value):
     return str(value).lower() in ('true', '1', 'yes')
 
@@ -97,7 +105,7 @@ def configure(context):
 
     def start_stack(event, ctx):
         if event.returncode != 0:
-            return [LogInfo(msg='LEGACY_PREFLIGHT_FAILED; no new stack started'), RaiseError(msg='PREFLIGHT_FAILED')]
+            return [LogInfo(msg='LEGACY_PREFLIGHT_FAILED; no new stack started'), failure('PREFLIGHT_FAILED')]
         if check_only:
             return [LogInfo(msg='CHECK_ONLY_COMPLETE'), EmitEvent(event=Shutdown(reason='CHECK_ONLY_COMPLETE'))]
         return configured_stack(mode, site, params, strategy, rmw, nav_only, allow_live, value, ctx)
@@ -194,7 +202,7 @@ def configured_stack(mode, site, params, strategy, rmw, nav_only, allow_live, va
                          'minimum_odom_hz':float(site['diagnostics']['minimum_odom_hz'])}])
         def admitted(event,ctx):
             if event.returncode != 0:
-                return [LogInfo(msg='SENSOR_GATE_FAILED'),RaiseError(msg='SENSOR_GATE_FAILED')]
+                return [LogInfo(msg='SENSOR_GATE_FAILED'),failure('SENSOR_GATE_FAILED')]
             return downstream
         nodes.extend([RegisterEventHandler(OnProcessExit(target_action=gate,on_exit=admitted)),gate])
     return with_failure_handlers(nodes,critical)
@@ -203,7 +211,7 @@ def configured_stack(mode, site, params, strategy, rmw, nav_only, allow_live, va
 def with_failure_handlers(actions,critical):
     def failed(event,context):
         if not context.is_shutdown:
-            return [LogInfo(msg='COMPONENT_EXIT code='+str(event.returncode)),RaiseError(msg='COMPONENT_EXIT')]
+            return [LogInfo(msg='COMPONENT_EXIT code='+str(event.returncode)),failure('COMPONENT_EXIT')]
         return []
     return [RegisterEventHandler(OnProcessExit(target_action=node,on_exit=failed)) for node in critical]+actions
 

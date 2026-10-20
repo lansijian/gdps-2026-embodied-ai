@@ -28,7 +28,7 @@ def ancestors(pid):
 
 def legacy_command(argv):
     tokens=[Path(a).name for a in argv[:3]]
-    if any(t in EXECUTABLES for t in tokens):return True
+    if any(t in EXECUTABLES or t.startswith('g1_nav_') or t=='nav2_container' for t in tokens):return True
     # Old Python scripts run directly rather than through installed entry points.
     if any(t in ('fix_stamp.py','fix_stamp_final.py') for t in tokens):return True
     if 'ros2' in tokens and 'launch' in argv and any(
