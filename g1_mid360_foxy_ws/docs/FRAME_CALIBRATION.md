@@ -10,3 +10,5 @@
 6. 每对 TF 仅一个发布者。可配置 tf.odom_owner/livox_owner 为 project 或 external；external 必须已有经过核验的同一变换。`tf2_echo odom robot_center` 应随真实 pose 动态变化；静止录制也不能以静态 TF 替代。`map→odom` 只由 SLAM 或 AMCL 发布；不发布固定 map→odom。rclcpp monitor 按 child/parent/GID 检测重复发布者和环，一旦发现冲突会锁定 INHIBIT，排障后完整重启。
 
 现场验收必须记录 `tf2_echo`、RViz 截图、地面高度/法向、已知物体坐标、单位、发布者 GID、真实时间戳。当前状态：**BLOCKED_NEEDS_CALIBRATION**。不得为了启动而填写 roll=π、pitch=π 或任意安装高度。
+
+robot_center 不假定在地面上。必须测量 filter.ground_z 与 ground_margin；min_height 可以是负值，但必须高于实测地板加留量。否则会漏掉身体原点下方的矮障碍。Nav2 ObservationBuffer 在 odom/map 中做二次高度筛选，因此不能照搬 robot_center 的高程窗口；本工程以已标定的机体点云预滤为准，代价地图仅保留 ±10m 的有限二次包络，不将其称为新的地面标定。

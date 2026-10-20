@@ -20,6 +20,9 @@ from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from std_msgs.msg import String
 from slam_toolbox.srv import SerializePoseGraph
 from lifecycle_msgs.srv import GetState
+from tf2_ros import StaticTransformBroadcaster
+from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import PointCloud2
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'logs/ros-integration';OUT.mkdir(parents=True,exist_ok=True)
@@ -62,6 +65,8 @@ node.create_subscription(Twist,'/cmd_vel',receive('cmd'),10)
 node.create_subscription(NavPath,'/plan',receive('path'),10)
 node.create_subscription(OccupancyGrid,'/local_costmap/costmap',receive('costmap'),10)
 node.create_subscription(OccupancyGrid,'/map',receive('map'),QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
+# Intentional mismatch probe: pipeline uses BEST_EFFORT and still receives data.
+node.create_subscription(PointCloud2,'/utlidar/cloud_livox_mid360',receive('incompatible_qos'),QoSProfile(depth=1))
 def wait(predicate,timeout=30):
     end=time.monotonic()+timeout
     while time.monotonic()<end:
@@ -72,10 +77,23 @@ def health():return json.loads(latest['health'].data) if 'health' in latest else
 results=[]
 def passed(label):
     results.append({'test':label,'status':'PASS','data_source':'SYNTHETIC_TEST'});print('PASS',label,flush=True)
+def child_pid(executable, group):
+    matches=[]
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():continue
+        try:
+            stat=(entry/'stat').read_text().rsplit(')',1)[1].split()
+            argv=(entry/'cmdline').read_bytes().split(b'\0')
+            if int(stat[2])==group and any(Path(arg.decode()).name==executable for arg in argv if arg):
+                matches.append(int(entry.name))
+        except (OSError,ValueError):pass
+    assert len(matches)==1,(executable,matches)
+    return matches[0]
 try:
     fixture=start('fixture',[sys.executable,str(ROOT/'tests/ros_fixture.py'),str(fault)])
     mapping=launch('mapping')
     wait(lambda: health().get('healthy') is True,30);passed('source_scan_tf_health')
+    assert counts.get('incompatible_qos',0)==0;passed('incompatible_qos_probe_no_messages_pipeline_receives')
     wait(lambda:'map' in latest and latest['map'].info.width>0 and any(x>=0 for x in latest['map'].data),100)
     passed('slam_toolbox_nonempty_map')
     subprocess.run(['ros2','run','nav2_map_server','map_saver_cli','-f',str(OUT/'synthetic-map'),
@@ -134,6 +152,22 @@ try:
             wait(obstacle_in_costmap,10);passed('dynamic_obstacle_marked_in_local_costmap')
         fault.write_text('');wait(lambda:health().get('healthy') is True,15)
     nf.result().cancel_goal_async()
+    for executable,label in (('tf_adapter','tf_loss'),('pipeline','health_heartbeat_loss')):
+        pid=child_pid(executable,nav.pid)
+        os.kill(pid,signal.SIGSTOP)
+        try:
+            wait(lambda:'observer' in latest and json.loads(latest['observer'].data)['safe_preview']==[0.,0.,0.] and
+                json.loads(latest['observer'].data)['reason']=='HEALTH_TIMEOUT_OR_INHIBIT',10)
+            passed('independent_timer_stop_'+label)
+        finally:os.kill(pid,signal.SIGCONT)
+        wait(lambda:health().get('healthy') is True,15)
+    duplicate=StaticTransformBroadcaster(node)
+    t=TransformStamped();t.header.frame_id='robot_center';t.child_frame_id='livox_frame'
+    t.header.stamp=node.get_clock().now().to_msg();t.transform.rotation.w=1.
+    duplicate.sendTransform(t)
+    wait(lambda:any('TF_DUPLICATE_OWNER' in reason for reason in health().get('reasons',[])),10)
+    wait(lambda:json.loads(latest['observer'].data)['safe_preview']==[0.,0.,0.],5)
+    passed('duplicate_tf_owner_latched_inhibit')
     passed('sdk_write_count_zero_all_ros_phases')
 finally:
     (OUT/'results.json').write_text(json.dumps({'results':results,'live':'DISABLED','robot':'ROBOT_VERIFICATION_PENDING'},indent=2))
