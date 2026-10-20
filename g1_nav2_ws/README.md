@@ -132,6 +132,6 @@ python3 example/g1/high_level/g1_loco_client_example.py eth0
 
 ## 开发验证
 
-GitHub 根目录包含此目录 workflow 的镜像，因为 Actions 不发现嵌套 `.github/workflows`。本目录是唯一交付工作空间；CI 副本不改变原工作区。CI 构建实际开源依赖，运行速度桥接口/顺序/超时测试、默认无设备 mapping launch，以及合成点云→scan→地图→Nav2 Action 检查，日志作为 artifact 上传。不会把驱动缺硬件错误或 timeout 的任意失败都当成功。
+GitHub 根目录包含此目录 workflow 的镜像，因为 Actions 不发现嵌套 `.github/workflows`。本目录是唯一交付工作空间；CI 副本不改变原工作区。CI 构建实际开源依赖，运行速度桥接口/顺序/超时测试、默认无设备 mapping launch，以及合成点云→scan→地图→Nav2 目标/速度输出、动态障碍写入/清除检查（SLAM 与保存地图 AMCL 两种模式），日志作为 artifact 上传。不会把驱动缺硬件错误或 timeout 的任意失败都当成功。
 
 每个 launch 的职责：`sensing.launch.py` 雷达/静态 TF/scan；`mapping.launch.py` 再加里程计和 SLAM；`nav_bringup.launch.py` 完整导航（SLAM 或保存地图二选一）；`cmd_vel_bridge/bridge.launch.py` 单独速度桥。默认 launch 不需要额外手起 TF 或 QoS 转换。
