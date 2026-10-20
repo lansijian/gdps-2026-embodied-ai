@@ -171,3 +171,41 @@ def test_failed_legacy_cleanup_prevents_any_new_node_construction(launching,monk
     monkeypatch.setattr(launching,'run_preflight',lambda *args:2)
     with pytest.raises(Blocked,match='LEGACY_PREFLIGHT_FAILED'):
         launching.configure({'mode':'sensor_check','site':'','map':''})
+
+
+@pytest.fixture
+def bridge_module(pipeline,monkeypatch):
+    install_modules(monkeypatch,{'geometry_msgs.msg':{'Twist':NS,'TwistStamped':NS}})
+    monkeypatch.delitem(sys.modules,'g1_nav_bridge.bridge',raising=False)
+    module=importlib.import_module('g1_nav_bridge.bridge')
+    yield module
+    sys.modules.pop('g1_nav_bridge.bridge',None)
+
+
+def test_sdk_worker_never_executes_nonzero_after_delayed_initialization(bridge_module,monkeypatch):
+    module=bridge_module;node=module.Bridge.__new__(module.Bridge);sent=[]
+    node.backend=NS(send=lambda velocity:sent.append(velocity));node.sdk_error='';node.permit_rpc=True
+    monkeypatch.setattr(module,'time',NS(monotonic=lambda:20.))
+    node.rpc((.1,0.,.1),deadline=10.)
+    assert sent==[(0.,0.,0.)]
+
+
+def test_dry_bridge_cleanup_does_not_shutdown_reserved_ros_executor(bridge_module,monkeypatch):
+    module=bridge_module;node=module.Bridge.__new__(module.Bridge);released=[]
+    node.sdk_pool=None;node.permit_rpc=True
+    def forbidden(*args,**kwargs):raise AssertionError('must not call ROS executor as a thread pool')
+    node.executor=NS(shutdown=forbidden)
+    node.lock=NS(release=lambda:released.append(True))
+    monkeypatch.setattr(module.Node,'destroy_node',lambda self:None,raising=False)
+    node.destroy_node()
+    assert released==[True] and node.permit_rpc is False
+
+
+def test_stamped_bridge_rejects_other_frame_and_old_commands(bridge_module,monkeypatch):
+    module=bridge_module;node=module.Bridge.__new__(module.Bridge);node.gate=NS(last_cmd='old')
+    monkeypatch.setattr(module,'time',NS(time=lambda:1000.,monotonic=lambda:10.))
+    node.command(NS(header=NS(frame_id='map',stamp=NS(sec=1000,nanosec=0))))
+    assert node.gate.last_cmd is None
+    node.gate.last_cmd='old'
+    node.command(NS(header=NS(frame_id='robot_center',stamp=NS(sec=999,nanosec=0))))
+    assert node.gate.last_cmd is None

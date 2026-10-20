@@ -23,7 +23,7 @@ def main(args=None):
                 rclpy.spin_once(node,timeout_sec=.1)
             if not result.done() or not result.result().success:
                 raise RuntimeError('Project lifecycle shutdown failed: '+name)
-            node.get_logger().info('SHUTDOWN_COMPLETE '+name+'; LIVE_DISABLED')
+            node.get_logger().info('SHUTDOWN_COMPLETE '+name+'; project nodes only')
     finally:
         node.destroy_node()
         if rclpy.ok():rclpy.shutdown()

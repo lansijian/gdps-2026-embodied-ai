@@ -66,8 +66,8 @@ node.create_subscription(Twist,'/g1_nav/cmd_vel_nav2',receive('cmd'),10)
 node.create_subscription(NavPath,'/plan',receive('path'),10)
 node.create_subscription(OccupancyGrid,'/local_costmap/costmap',receive('costmap'),10)
 node.create_subscription(OccupancyGrid,'/map',receive('map'),QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
-# Intentional mismatch probe: pipeline uses BEST_EFFORT and still receives data.
-node.create_subscription(PointCloud2,'/utlidar/cloud_livox_mid360',receive('incompatible_qos'),QoSProfile(depth=1))
+# Intentional durability mismatch: native publishers are RELIABLE/VOLATILE, pipeline BE/VOLATILE still receives.
+node.create_subscription(PointCloud2,'/utlidar/cloud_livox_mid360',receive('incompatible_qos'),QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
 def wait(predicate,timeout=30):
     end=time.monotonic()+timeout
     while time.monotonic()<end:

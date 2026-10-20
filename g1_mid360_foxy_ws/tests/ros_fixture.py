@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import PointCloud2, PointField, Imu
 from nav_msgs.msg import Odometry
 
@@ -20,8 +20,8 @@ class Fixture(Node):
         self.fault_path = Path(fault_path)
         self.load_test = os.environ.get('G1_NAV_LOAD_TEST') == '1'
         self.payloads = {}
-        self.cloud = self.create_publisher(PointCloud2, '/utlidar/cloud_livox_mid360', qos_profile_sensor_data)
-        self.odom = self.create_publisher(Odometry, '/dog_odom', qos_profile_sensor_data)
+        self.cloud = self.create_publisher(PointCloud2, '/utlidar/cloud_livox_mid360', QoSProfile(depth=5,reliability=ReliabilityPolicy.RELIABLE))
+        self.odom = self.create_publisher(Odometry, '/dog_odom', QoSProfile(depth=5,reliability=ReliabilityPolicy.RELIABLE))
         self.imu = self.create_publisher(Imu, '/utlidar/imu_livox_mid360', qos_profile_sensor_data)
         self.create_timer(.1, self.points)
         self.create_timer(.00125 if self.load_test else .02, self.pose)

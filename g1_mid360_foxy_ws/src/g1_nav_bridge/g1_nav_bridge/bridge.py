@@ -22,7 +22,7 @@ class Bridge(Node):
             raise RuntimeError('LIVE_BLOCKED: explicit sdk_interface and sdk_domain required')
         self.gate=DryGate(site['limits']);self.lock=MotionLock.acquire('g1_nav_bridge')
         self.health=None;self.health_received=None;self.backend=None;self.future=None;self.rpc_started=0.
-        self.sdk_error='';self.sdk_writes=0;self.executor=ThreadPoolExecutor(max_workers=1) if self.live else None
+        self.sdk_error='';self.sdk_writes=0;self.permit_rpc=False;self.sdk_pool=ThreadPoolExecutor(max_workers=1) if self.live else None
         self.safe=self.create_publisher(TwistStamped,'/g1_nav/cmd_vel_safe',5)
         self.observer=self.create_publisher(String,'/g1_nav/command_observer',10)
         self.create_subscription(TwistStamped,'/g1_nav/cmd_vel_stamped',self.command,5)
@@ -48,10 +48,13 @@ class Bridge(Node):
             self.health=data;self.health_received=time.monotonic()
         except (ValueError,TypeError):self.health=None
 
-    def rpc(self,velocity):
+    def rpc(self,velocity,deadline):
         if self.backend is None:
             from .live_backend import LocoBackend
             self.backend=LocoBackend(self.get_parameter('sdk_interface').value,self.get_parameter('sdk_domain').value)
+        # SDK initialization can block: never execute the old nonzero command later.
+        if time.monotonic()>deadline or not self.permit_rpc or self.sdk_error:
+            velocity=(0.,0.,0.)
         self.backend.send(velocity)
         return True
 
@@ -66,6 +69,7 @@ class Bridge(Node):
                 except Exception as exc:self.sdk_error='SDK_ERROR:'+str(exc)
                 self.future=None
             elif now-self.rpc_started>.25:self.sdk_error='SDK_RPC_TIMEOUT_LATCHED'
+        self.permit_rpc=bool(ready and not self.sdk_error)
         reason='OBSTACLE_STOP' if h.get('obstacle_stop') else 'HEALTH_TIMEOUT_OR_INHIBIT'
         velocity=self.gate.tick(now,ready and not self.sdk_error,self.sdk_error or reason)
         out=TwistStamped();out.header.frame_id='robot_center';out.header.stamp=self.get_clock().now().to_msg()
@@ -73,7 +77,7 @@ class Bridge(Node):
         self.safe.publish(out)
         # Do not initialize SDK merely to send a zero while startup health is inhibited.
         if self.live and not self.sdk_error and self.future is None and (ready or self.backend is not None):
-            self.rpc_started=now;self.future=self.executor.submit(self.rpc,velocity)
+            self.rpc_started=now;self.future=self.sdk_pool.submit(self.rpc,velocity,now+.2)
         msg=String();msg.data=json.dumps({'live':'ENABLED' if self.live else 'DISABLED','sdk_write_calls':self.sdk_writes,
             'reason':self.gate.reason,'health_age_s':now-self.health_received if self.health_received else None,
             'safe_preview':list(velocity),'health_reasons':h.get('reasons',[])})
@@ -81,7 +85,8 @@ class Bridge(Node):
 
     def destroy_node(self):
         # Every SDK command has a short finite lease. No action/FSM API is called on exit.
-        if self.executor:self.executor.shutdown(wait=False)
+        self.permit_rpc=False
+        if self.sdk_pool:self.sdk_pool.shutdown(wait=False)
         self.lock.release();super().destroy_node()
 
 
