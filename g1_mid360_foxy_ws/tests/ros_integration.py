@@ -136,8 +136,14 @@ try:
     nf=navigator.send_goal_async(ng);wait(lambda:nf.done(),10);assert nf.result().accepted
     wait(lambda:'cmd' in latest and abs(latest['cmd'].linear.x)>0,30);passed('dwb_generates_cmd_vel_without_sdk')
     wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')
+    fault_reasons={'cloud_loss':'cloud:TIMEOUT','odom_loss':'odom:TIMEOUT','stale_time':'STALE_STAMP',
+                   'future_time':'FUTURE_STAMP','wrong_frame':'WRONG_FRAME_cloud'}
     for injected in ('dynamic_obstacle','cloud_loss','odom_loss','stale_time','future_time','wrong_frame'):
         fault.write_text(injected)
+        if injected=='dynamic_obstacle':
+            wait(lambda:health().get('obstacle_stop') is True,10)
+        else:
+            wait(lambda:any(fault_reasons[injected] in reason for reason in health().get('reasons',[])),10)
         wait(lambda:'safe' in latest and latest['safe'].linear.x==0. and
             ('OBSTACLE' in json.loads(latest['observer'].data)['reason'] or health().get('healthy') is False),10)
         assert json.loads(latest['observer'].data)['sdk_write_calls']==0
@@ -150,7 +156,9 @@ try:
                 y=int((0.-m.info.origin.position.y)/m.info.resolution)
                 return 0<=x<m.info.width and 0<=y<m.info.height and m.data[y*m.info.width+x]>=90
             wait(obstacle_in_costmap,10);passed('dynamic_obstacle_marked_in_local_costmap')
-        fault.write_text('');wait(lambda:health().get('healthy') is True,15)
+        reset=time.time();fault.write_text('')
+        wait(lambda:health().get('healthy') is True and health().get('obstacle_stop') is False and
+             health().get('realtime',0)>=reset,15)
     nf.result().cancel_goal_async()
     for executable,label in (('tf_adapter','tf_loss'),('pipeline','health_heartbeat_loss')):
         pid=child_pid(executable,nav.pid)
