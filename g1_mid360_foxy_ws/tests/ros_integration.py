@@ -74,7 +74,7 @@ try:
     fixture=start('fixture',[sys.executable,str(ROOT/'tests/ros_fixture.py'),str(fault)])
     mapping=launch('mapping')
     wait(lambda: health().get('healthy') is True,30);passed('source_scan_tf_health')
-    wait(lambda:'map' in latest and latest['map'].width>0 and any(x>=0 for x in latest['map'].data),100)
+    wait(lambda:'map' in latest and latest['map'].info.width>0 and any(x>=0 for x in latest['map'].data),100)
     passed('slam_toolbox_nonempty_map')
     subprocess.run(['ros2','run','nav2_map_server','map_saver_cli','-f',str(OUT/'synthetic-map'),
                     '--ros-args','-p','save_map_timeout:=10.0'],check=True,timeout=25)
@@ -132,3 +132,7 @@ finally:
     for process in reversed(processes):stop(process)
     node.destroy_node();rclpy.shutdown()
     for f in files:f.close()
+    if sys.exc_info()[0] is not None:
+        for path in OUT.glob('*.log'):
+            print('\nDIAGNOSTIC LOG', path.name)
+            print('\n'.join(path.read_text(errors='replace').splitlines()[-60:]))
