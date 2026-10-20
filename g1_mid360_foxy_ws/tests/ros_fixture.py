@@ -14,9 +14,12 @@ from nav_msgs.msg import Odometry
 
 class Fixture(Node):
     def __init__(self, fault_path):
+        if os.environ.get('G1_NAV_TEST_ONLY')!='1' or os.environ.get('ROS_DOMAIN_ID')!='87':
+            raise RuntimeError('Synthetic source requires explicit test-only domain 87')
         super().__init__('SYNTHETIC_TEST_sensor_fixture')
         self.fault_path = Path(fault_path)
         self.load_test = os.environ.get('G1_NAV_LOAD_TEST') == '1'
+        self.payloads = {}
         self.cloud = self.create_publisher(PointCloud2, '/utlidar/cloud_livox_mid360', qos_profile_sensor_data)
         self.odom = self.create_publisher(Odometry, '/dog_odom', qos_profile_sensor_data)
         self.imu = self.create_publisher(Imu, '/utlidar/imu_livox_mid360', qos_profile_sensor_data)
@@ -42,6 +45,17 @@ class Fixture(Node):
         fault = self.fault()
         if fault == 'cloud_loss':
             return
+        dynamic = fault == 'dynamic_obstacle'
+        if dynamic not in self.payloads:
+            self.payloads[dynamic] = self.build_cloud(dynamic)
+        m = self.payloads[dynamic]
+        m.header.frame_id='wrong_sensor' if fault=='wrong_frame' else 'livox_frame'
+        m.header.stamp=self.stamp()
+        self.cloud.publish(m)
+
+    def build_cloud(self, dynamic):
+        # Cache immutable synthetic geometry so Python packing cannot throttle
+        # the independent 800 Hz odom / 200 Hz IMU source timers every scan.
         pts = []
         for i in range(720):
             a = -math.pi+2*math.pi*i/720
@@ -49,16 +63,15 @@ class Fixture(Node):
             distance = 3/max(abs(c), abs(s))
             pts.append((distance*c, distance*s, .3))
             pts.append((distance*.5*c, distance*.5*s, -.5))
-        if fault == 'dynamic_obstacle':
+        if dynamic:
             pts.extend((.45, -.2+i*.01, .3) for i in range(41))
         if self.load_test:
             # Repeated SYNTHETIC geometry tests processing load, not real coverage.
             pts=[pts[i%len(pts)] for i in range(20064)]
-        m=PointCloud2();m.header.frame_id='wrong_sensor' if fault=='wrong_frame' else 'livox_frame'
-        m.header.stamp=self.stamp();m.height=1;m.width=len(pts);m.point_step=32 if self.load_test else 12;m.row_step=len(pts)*m.point_step
+        m=PointCloud2();m.height=1;m.width=len(pts);m.point_step=32 if self.load_test else 12;m.row_step=len(pts)*m.point_step
         m.fields=[PointField(name=n,offset=i*4,datatype=PointField.FLOAT32,count=1) for i,n in enumerate('xyz')]
         m.is_dense=True;m.data=b''.join(struct.pack('<fff',*p)+(b'\0'*20 if self.load_test else b'') for p in pts)
-        self.cloud.publish(m)
+        return m
 
     def pose(self):
         if self.fault()=='odom_loss':return
@@ -72,6 +85,8 @@ class Fixture(Node):
 
 if __name__=='__main__':
     import sys
+    if os.environ.get('G1_NAV_TEST_ONLY')!='1' or os.environ.get('ROS_DOMAIN_ID')!='87':
+        raise SystemExit('Refusing synthetic factory-topic publication outside explicit test domain 87')
     rclpy.init();node=Fixture(sys.argv[1])
     try:rclpy.spin(node)
     finally:node.destroy_node();rclpy.shutdown()

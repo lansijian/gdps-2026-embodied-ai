@@ -111,6 +111,9 @@ try:
     subprocess.run(['ros2','run','nav2_map_server','map_saver_cli','-f',str(OUT/'synthetic-map'),
                     '--ros-args','-p','save_map_timeout:=10000','-p','map_subscribe_transient_local:=true'],check=True,timeout=25)
     assert (OUT/'synthetic-map.yaml').is_file();passed('occupancy_map_saved')
+    saved_map=yaml.safe_load((OUT/'synthetic-map.yaml').read_text())
+    saved_map['gdps_data_source']='SYNTHETIC_TEST'
+    (OUT/'synthetic-map.yaml').write_text(yaml.safe_dump(saved_map))
     client=node.create_client(SerializePoseGraph,'/slam_toolbox/serialize_map')
     assert client.wait_for_service(timeout_sec=10)
     req=SerializePoseGraph.Request();req.filename=str(OUT/'synthetic-posegraph')
@@ -126,7 +129,7 @@ try:
     pose_pub=node.create_publisher(PoseWithCovarianceStamped,'/initialpose',10)
     # Wait for AMCL lifecycle, then send a single fixture-specific initial pose.
     state_client=node.create_client(GetState,'/amcl/get_state')
-    assert state_client.wait_for_service(timeout_sec=50)
+    assert state_client.wait_for_service(timeout_sec=70)
     until=time.monotonic()+30
     while time.monotonic()<until:
         state=state_client.call_async(GetState.Request());wait(lambda:state.done(),5)

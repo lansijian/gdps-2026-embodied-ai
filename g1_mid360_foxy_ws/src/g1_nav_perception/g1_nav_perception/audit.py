@@ -72,15 +72,21 @@ class Gate(Node):
         good = (h.get('healthy') is True and self.received is not None and
                 now-self.received < .3 and self.count_publishers('/g1_nav/health') == 1)
         streams = h.get('streams', {})
+        clean_window = True
         for name, hz in (('cloud', self.get_parameter('minimum_cloud_hz').value),
                          ('odom', self.get_parameter('minimum_odom_hz').value), ('scan', 5.), ('imu', 20.)):
             s = streams.get(name, {})
-            good = good and s.get('hz', 0) >= hz and s.get('invalid_window', 1) == 0
+            good = good and s.get('hz', 0) >= hz
+            # Check clean history at admission, rather than restarting a second
+            # 30s timer every time an already-cleared historical error is seen.
+            clean_window = (clean_window and s.get('invalid_window', 1) == 0 and
+                            s.get('window_s', 0) >= self.get_parameter('duration_s').value-.2)
         if not good:
             self.since = None
         elif self.since is None:
             self.since = now
-        return self.since is not None and now-self.since >= self.get_parameter('duration_s').value
+        return (clean_window and self.since is not None and
+                now-self.since >= self.get_parameter('duration_s').value)
 
 
 def gate_main(args=None):
