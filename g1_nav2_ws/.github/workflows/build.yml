@@ -24,6 +24,11 @@ jobs:
       - name: build
         run: |
           source .deps/environment.bash
+          mkdir -p evidence
+          uname -m | tee evidence/architecture.txt
+          cat /etc/os-release > evidence/os-release.txt
+          ldd .deps/dds/install/rmw_cyclonedds_cpp/lib/librmw_cyclonedds_cpp.so | tee evidence/rmw-linkage.txt
+          grep -E 'libddsc.*\.deps/dds/install/cyclonedds/lib' evidence/rmw-linkage.txt
           colcon build --symlink-install --event-handlers console_direct+
       - name: lint-no-gates
         run: |

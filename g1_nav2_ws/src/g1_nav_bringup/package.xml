@@ -4,7 +4,7 @@
   <name>g1_nav_bringup</name><version>0.1.0</version>
   <description>Minimal G1 Foxy navigation integration</description>
   <maintainer email="maintainers@example.com">GDPS contributors</maintainer>
-  <license>Apache-2.0</license><buildtool_depend>ament_python</buildtool_depend>
+  <license>Apache-2.0</license>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
