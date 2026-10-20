@@ -14,7 +14,9 @@ for path in root.rglob('*'):
     rel = path.relative_to(root)
     if any(part in {'external', 'external_sources', 'logs', 'build', 'install', 'log', '__pycache__', '.pytest_cache', '.git'} for part in rel.parts):
         continue
-    if len(rel.parts) > 1 and rel.parts[0] not in {'src', 'scripts', 'docs', 'tests', 'licenses'}:
+    if len(rel.parts) > 1 and rel.parts[0] not in {'src', 'scripts', 'docs', 'tests', 'licenses', 'config'}:
+        continue
+    if rel.parts[0] == 'config' and str(rel).replace('\\','/') != 'config/site.g1_default.yaml':
         continue
     if (path.is_file() and not path.is_symlink() and path.name != 'site.yaml' and
             not path.name.startswith('.env') and path != output and
@@ -25,8 +27,16 @@ manifest = {str(f.relative_to(root)).replace('\\', '/'): hashlib.sha256(f.read_b
 if output.suffix == '.zip':
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for f in sorted(files):
-            archive.write(f, str(f.relative_to(root)).replace('\\', '/'))
-        archive.writestr('SOURCE_MANIFEST.json', json.dumps(manifest, indent=2))
+            info = zipfile.ZipInfo(str(f.relative_to(root)).replace('\\', '/'), date_time=(1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = (0o100755 if f.suffix == '.sh' else 0o100644) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, f.read_bytes())
+        info = zipfile.ZipInfo('SOURCE_MANIFEST.json', date_time=(1980, 1, 1, 0, 0, 0))
+        info.create_system = 3
+        info.external_attr = 0o100644 << 16
+        info.compress_type = zipfile.ZIP_DEFLATED
+        archive.writestr(info, json.dumps(manifest, indent=2))
 else:
     with tarfile.open(output, 'w:gz') as archive:
         for f in sorted(files):

@@ -1,3 +1,7 @@
+# Field fix r2
+
+新版双终端入口与更新时间策略见 [FIELD_FIX_R2.md](FIELD_FIX_R2.md)，本轮测试边界见 [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md)。下文为底层安装/标定/保存地图步骤。不要同时运行独立 fix_stamp.py、TF 或 scan 转换器。
+
 # G1 本地部署（Ubuntu 20.04 ARM64 / Foxy / CycloneDDS）
 
 本版本 LIVE=DISABLED，没有 SDK 写调用路径。真实外参、时间来源、足迹、安全场地未确认时，正式导航入口会报错；这是有效阻断，不能将模板里的 null 改成猜测值。机器人端命令尚未在真实 G1 执行，状态 ROBOT_VERIFICATION_PENDING。

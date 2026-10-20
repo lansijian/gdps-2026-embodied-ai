@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Stage 3 mitigation, NOT an OOM fix claim. Keep ~/cyclonedds_ws unchanged.
+ WhcHigh=2MB bounds the reliable writer history pressure watermark; NOT a process RSS cap.
+ MinimumSocketReceiveBufferSize=30MB requests receive buffering; OS rmem_max must permit it.
+ No sysctl is changed. If this minimum prevents startup on the target, use a reviewed profile
+ with a smaller value or restore your saved CYCLONEDDS_URI via dds_config:=/absolute/old.xml.
+ Rollback: stop this stack and restore the old URI; factory DDS processes are not reconfigured.
+ Reference: https://github.com/ros2/rmw_cyclonedds/issues/292
+ Interface selection is auto; preserve any required site interface/peer settings in an explicit copy.
+ -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain id="any">
+    <Internal>
+      <Watermarks><WhcHigh>2MB</WhcHigh></Watermarks>
+      <MinimumSocketReceiveBufferSize>30MB</MinimumSocketReceiveBufferSize>
+    </Internal>
+  </Domain>
+</CycloneDDS>

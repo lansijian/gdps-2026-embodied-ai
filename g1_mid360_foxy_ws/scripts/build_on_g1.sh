@@ -7,6 +7,7 @@ test "$(uname -m)" = aarch64 || { echo 'G1 build requires ARM64'; exit 2; }
 grep -q 'VERSION_ID="20.04"' /etc/os-release || { echo 'Ubuntu 20.04 required'; exit 2; }
 command -v colcon
 cd "$ROOT"
+python3 "$ROOT/scripts/fix_source_mtime.py" --apply
 colcon list --base-paths src
 colcon build --base-paths src --executor sequential --event-handlers console_direct+
 source_overlay

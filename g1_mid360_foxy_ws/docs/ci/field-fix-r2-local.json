@@ -1,0 +1,20 @@
+{
+  "revision": "field-fix-r2",
+  "platform": "win32",
+  "python": "3.11.4",
+  "data_source": "PORTABLE_UNIT_TESTS_WITH_ROS_API_DOUBLES",
+  "workspace_pytest": 112,
+  "existing_robot_navigation_pytest": 104,
+  "shell_syntax_passed": 9,
+  "powershell_ast_errors": 0,
+  "arm64_foxy_r2": "NOT_EXECUTED",
+  "dds_qos_matrix_r2": "NOT_EXECUTED",
+  "g1_navigation_r2": "ROBOT_VERIFICATION_PENDING",
+  "bad_alloc_root_cause": "UNKNOWN",
+  "live": "DISABLED",
+  "git_push": "NOT_PERFORMED",
+  "robot_deployment": "NOT_PERFORMED",
+  "fastdds_arm64_r2": "NOT_EXECUTED",
+  "conda_cli_expected_rejection": "NATIVE_PYTHON_REQUIRED",
+  "handoff_attachment_sha256": "785ffc77fafc6afa522a25fec89ee4a5f8ce433e255e2f53650134a014b46026"
+}

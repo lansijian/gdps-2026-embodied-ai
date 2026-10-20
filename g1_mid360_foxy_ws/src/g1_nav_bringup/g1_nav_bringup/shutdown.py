@@ -11,8 +11,7 @@ def main(args=None):
     parser.add_argument('--localization-only',action='store_true')
     options=parser.parse_args(args)
     rclpy.init(args=[]);node=Node('g1_nav_orderly_shutdown')
-    managers=['lifecycle_manager_localization'] if options.localization_only else [
-        'lifecycle_manager_navigation','lifecycle_manager_localization']
+    managers=['lifecycle_manager_navigation']
     try:
         for name in managers:
             client=node.create_client(ManageLifecycleNodes,'/'+name+'/manage_nodes')

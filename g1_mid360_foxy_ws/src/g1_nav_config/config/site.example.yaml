@@ -15,7 +15,8 @@ calibration:
 timing:
   verified: false
   evidence_id: ''
-  strategy: preserve
+  strategy: offset
+  receipt_time_acknowledged: false
   max_age_s: 0.3
   max_future_s: 0.03
   jump_s: 0.2
@@ -48,6 +49,7 @@ live:
 tf:
   odom_owner: project
   livox_owner: project
+  keep_z: false
 diagnostics:
   window_s: 30.0
   minimum_cloud_hz: 7.0

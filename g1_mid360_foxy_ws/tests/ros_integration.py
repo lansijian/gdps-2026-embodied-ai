@@ -16,7 +16,7 @@ from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from rclpy.action import ActionClient
 from nav_msgs.msg import OccupancyGrid, Path as NavPath
 from nav2_msgs.action import ComputePathToPose, NavigateToPose
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from geometry_msgs.msg import Twist, TwistStamped, PoseWithCovarianceStamped
 from std_msgs.msg import String
 from slam_toolbox.srv import SerializePoseGraph
 from lifecycle_msgs.srv import GetState
@@ -51,7 +51,7 @@ def stop(p):
         except subprocess.TimeoutExpired:
             os.killpg(p.pid,signal.SIGTERM);p.wait(10)
 def launch(mode,map_path=None):
-    cmd=['ros2','launch','g1_nav_bringup',mode+'.launch.py','site:='+str(site_path)]
+    cmd=['ros2','launch','g1_nav_bringup',mode+'.launch.py','site:='+str(site_path),'time_strategy:=preserve']
     if map_path:cmd+=['map:='+str(map_path)]
     return start(mode,cmd)
 rclpy.init();node=Node('SYNTHETIC_TEST_acceptance')
@@ -61,7 +61,7 @@ def receive(key):
     return callback
 node.create_subscription(String,'/g1_nav/health',receive('health'),10)
 node.create_subscription(String,'/g1_nav/command_observer',receive('observer'),10)
-node.create_subscription(Twist,'/g1_nav/cmd_vel_safe',receive('safe'),10)
+node.create_subscription(TwistStamped,'/g1_nav/cmd_vel_safe',receive('safe'),10)
 node.create_subscription(Twist,'/g1_nav/cmd_vel_nav2',receive('cmd'),10)
 node.create_subscription(NavPath,'/plan',receive('path'),10)
 node.create_subscription(OccupancyGrid,'/local_costmap/costmap',receive('costmap'),10)
@@ -143,7 +143,8 @@ try:
     wait(lambda:'costmap' in latest,45);passed('map_reloaded_amcl_and_costmap_active')
     for name in ('map_server','amcl','controller_server','planner_server','recoveries_server','bt_navigator'):
         active(name)
-    passed('all_six_nav2_lifecycle_nodes_active')
+    active('waypoint_follower')
+    passed('all_seven_nav2_lifecycle_nodes_active')
     planner=ActionClient(node,ComputePathToPose,'/compute_path_to_pose')
     assert planner.wait_for_server(timeout_sec=30)
     goal=ComputePathToPose.Goal();goal.pose.header.frame_id='map';goal.pose.header.stamp=node.get_clock().now().to_msg()
@@ -158,7 +159,7 @@ try:
     wait(lambda:'cmd' in latest and abs(latest['cmd'].linear.x)>0,30);passed('dwb_generates_cmd_vel_without_sdk')
     assert node.count_publishers('/cmd_vel')==0
     passed('no_generic_cmd_vel_output_to_existing_bridges')
-    wait(lambda:'safe' in latest and latest['safe'].linear.x>0,10);passed('healthy_safe_preview')
+    wait(lambda:'safe' in latest and latest['safe'].twist.linear.x>0,10);passed('healthy_safe_preview')
     fault_reasons={'cloud_loss':'cloud:TIMEOUT','odom_loss':'odom:TIMEOUT','stale_time':'STALE_STAMP',
                    'future_time':'FUTURE_STAMP','wrong_frame':'WRONG_FRAME_cloud',
                    'unsupported_layout':'UNSUPPORTED_FOXY_SCAN_LAYOUT'}
@@ -168,7 +169,7 @@ try:
             wait(lambda:health().get('obstacle_stop') is True,10)
         else:
             wait(lambda:any(fault_reasons[injected] in reason for reason in health().get('reasons',[])),10)
-        wait(lambda:'safe' in latest and latest['safe'].linear.x==0. and
+        wait(lambda:'safe' in latest and latest['safe'].twist.linear.x==0. and
             ('OBSTACLE' in json.loads(latest['observer'].data)['reason'] or health().get('healthy') is False),10)
         assert json.loads(latest['observer'].data)['sdk_write_calls']==0
         passed('fault_stop_'+injected)

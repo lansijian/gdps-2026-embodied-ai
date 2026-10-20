@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import PointCloud2, PointField, Imu, LaserScan
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String
@@ -17,33 +17,59 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer, TransformListener
 from rclpy.time import Time
-from .core import Stream, Blocked, finite, quaternion, rotate, points_xyz, stamp_seconds, validate_site
+from .core import Stream, ReceiptClock, Blocked, finite, quaternion, rotate, points_xyz, stamp_seconds, validate_site, site_warnings, OffsetCalibrator, assign_stamp
 from .cloud import crop
+from .settings import read_site, default_path
+
+# Explicit bounded input queues, compatible with BEST_EFFORT and RELIABLE writers.
+SENSOR_QOS = QoSProfile(history=HistoryPolicy.KEEP_LAST, depth=5,
+                        reliability=ReliabilityPolicy.BEST_EFFORT)
 
 
 def load_site(node):
-    node.declare_parameter('site', '')
+    node.declare_parameter('site', str(default_path()))
     if node.get_parameter('use_sim_time').value:
         raise Blocked('use_sim_time must be false; replay must use wall-time stamps')
     path = node.get_parameter('site').value
     if not path or not Path(path).is_file():
         raise Blocked('site file missing; copy and calibrate site.example.yaml')
-    return validate_site(yaml.safe_load(Path(path).read_text()), full=False)
+    return validate_site(read_site(path), full=False)
 
 
 class Pipeline(Node):
     def __init__(self):
         super().__init__('g1_nav_pipeline')
         self.site = load_site(self)
-        self.calibrated = True
+        self.declare_parameter('time_strategy', '')
+        override = self.get_parameter('time_strategy').value
+        if override:
+            self.site['timing']['strategy'] = override
+        self.warnings = site_warnings(self.site)
+        for warning in self.warnings:
+            self.get_logger().warning(warning)
+        c = self.site['calibration']
+        self.calibrated = False
         try:
-            validate_site(self.site)
-        except (Blocked, KeyError, TypeError) as exc:
-            self.calibrated = False
-            self.get_logger().error(str(exc))
+            quaternion(c['quaternion_xyzw'])
+            self.calibrated = finite(c['translation_xyz']) and len(c['translation_xyz']) == 3
+        except (Blocked, TypeError):
+            pass
+        f = self.site['filter']
+        self.calibrated = self.calibrated and finite([f.get('min_height'), f.get('max_height')]) and f['min_height'] < f['max_height']
         t = self.site['timing']
         self.streams = {k: Stream(t['max_age_s'], t['max_future_s'], t['jump_s'])
                         for k in ('cloud', 'odom', 'imu', 'scan')}
+        self.raw_streams = {k: Stream(t['max_age_s'], t['max_future_s'], t['jump_s'])
+                            for k in ('cloud', 'odom', 'imu')}
+        self.receipt_clock = ReceiptClock(t['jump_s'])
+        self.offsets = {k: OffsetCalibrator(time.monotonic()) for k in ('cloud', 'odom', 'imu')}
+        self.offset_logged = set()
+        self.last_jitter_warning = 0.
+        self.resources = None
+        self.resource_received = None
+        self.get_logger().info('INPUT raw=/utlidar/cloud_livox_mid360 QoS=BEST_EFFORT depth=5; '
+                               'OUTPUT=/g1_nav/cloud_timed QoS=BEST_EFFORT depth=10; '
+                               'base=robot_center timestamp='+t['strategy']+' site='+str(self.get_parameter('site').value))
         self.started = time.monotonic()
         self.last_odom_publish = 0.
         self.frame_errors = {}
@@ -52,21 +78,22 @@ class Pipeline(Node):
         self.tf_observable = True
         self.authority_received = None
         self.authority_ok = False
-        self.cloud_pub = self.create_publisher(PointCloud2, '/g1_nav/cloud_timed', qos_profile_sensor_data)
-        self.obstacles = self.create_publisher(PointCloud2, '/g1_nav/cloud_obstacles', qos_profile_sensor_data)
-        self.odom_pub = self.create_publisher(Odometry, '/g1_nav/odom', qos_profile_sensor_data)
-        self.imu_pub = self.create_publisher(Imu, '/g1_nav/imu', qos_profile_sensor_data)
+        self.cloud_pub = self.create_publisher(PointCloud2, '/g1_nav/cloud_timed', QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self.obstacles = self.create_publisher(PointCloud2, '/g1_nav/cloud_obstacles', SENSOR_QOS)
+        self.odom_pub = self.create_publisher(Odometry, '/g1_nav/odom', SENSOR_QOS)
+        self.imu_pub = self.create_publisher(Imu, '/g1_nav/imu', SENSOR_QOS)
         self.status = self.create_publisher(String, '/g1_nav/health', 10)
         self.diagnostics = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
-        self.create_subscription(PointCloud2, '/utlidar/cloud_livox_mid360', self.cloud, qos_profile_sensor_data)
-        self.create_subscription(Odometry, '/dog_odom', self.odom, qos_profile_sensor_data)
-        self.create_subscription(Imu, '/utlidar/imu_livox_mid360', self.imu, qos_profile_sensor_data)
-        self.create_subscription(LaserScan, '/scan', self.scan, qos_profile_sensor_data)
+        self.create_subscription(PointCloud2, '/utlidar/cloud_livox_mid360', self.cloud, SENSOR_QOS)
+        self.create_subscription(Odometry, '/dog_odom', self.odom, SENSOR_QOS)
+        self.create_subscription(Imu, '/utlidar/imu_livox_mid360', self.imu, SENSOR_QOS)
+        self.create_subscription(LaserScan, '/scan', self.scan, SENSOR_QOS)
         # Explicit scan subscription also activates Foxy cloud_to_scan's lazy input subscriber.
         self.create_subscription(TFMessage, '/tf', self.tf, 100)
         qos_static = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(TFMessage, '/tf_static', self.tf, qos_static)
-        self.create_subscription(String, '/g1_nav/tf_authority', self.authority, 10)
+        self.create_subscription(String, '/g1_nav/tf_authority', self.authority, SENSOR_QOS)
+        self.create_subscription(String, '/g1_nav/resource_health', self.resource_status, SENSOR_QOS)
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
         self.scan_ratio = 0.
@@ -79,13 +106,61 @@ class Pipeline(Node):
         valid = self.streams[name].observe(stamp_seconds(msg.header.stamp), time.time(), time.monotonic())
         return valid and not self.frame_errors[name]
 
+    def prepare(self, name, original):
+        realtime, monotonic = time.time(), time.monotonic()
+        self.raw_streams[name].observe(stamp_seconds(original.header.stamp), realtime, monotonic)
+        if self.site['timing']['strategy'] == 'preserve':
+            return original
+        if not self.receipt_clock.observe(realtime, monotonic):
+            self.frame_errors[name] = 'HOST_CLOCK_STEP_RESTART_REQUIRED'
+            return None
+        strategy = self.site['timing']['strategy']
+        corrected = realtime
+        if strategy == 'offset':
+            calibrator = self.offsets[name]
+            corrected = calibrator.observe(stamp_seconds(original.header.stamp), realtime, monotonic)
+            if calibrator.offset is not None and name not in self.offset_logged:
+                self.offset_logged.add(name)
+                self.get_logger().info('OFFSET_CALIBRATED '+name+' offset_s='+str(calibrator.offset))
+            if corrected is None:
+                return None
+            if calibrator.jitter > .05 and monotonic-self.last_jitter_warning > 5:
+                self.get_logger().warning('OFFSET_JITTER '+name+' range_s='+str(calibrator.jitter)+' >0.05')
+                self.last_jitter_warning = monotonic
+        elif strategy != 'receive_time':
+            self.frame_errors[name] = 'UNSUPPORTED_TIME_STRATEGY'
+            return None
+        msg = copy.deepcopy(original)
+        assign_stamp(msg, corrected)
+        return msg
+
+    def resource_status(self, msg):
+        try:
+            self.resources = json.loads(msg.data)
+            self.resource_received = time.monotonic()
+        except (ValueError, TypeError):
+            pass
+
     def cloud(self, msg):
+        msg = self.prepare('cloud', msg)
+        if msg is None:
+            return
         ok = self.accept('cloud', msg, 'livox_frame')
-        if not ok or not self.calibrated:
+        if not ok:
             return
         xyz = {field.name: field for field in msg.fields}
         if msg.is_bigendian or any(name not in xyz or xyz[name].datatype != PointField.FLOAT32 for name in ('x', 'y', 'z')):
             self.frame_errors['cloud'] = 'UNSUPPORTED_FOXY_SCAN_LAYOUT: requires little-endian FLOAT32 XYZ'
+            return
+        if not (0 < msg.width*msg.height <= 200000 and 12 <= msg.point_step <= 256 and
+                msg.row_step >= msg.width*msg.point_step and len(msg.data) == msg.row_step*msg.height and
+                len(msg.data) <= 16*1024*1024) or any(
+                    xyz[name].count != 1 or not 0 <= xyz[name].offset <= msg.point_step-4 for name in ('x', 'y', 'z')):
+            self.frame_errors['cloud'] = 'CLOUD_LAYOUT_OR_RESOURCE_BOUND'
+            return
+        if not self.calibrated:
+            # Audit scan stays in livox_frame: no unmeasured physical TF is created.
+            self.cloud_pub.publish(msg)
             return
         c, f = self.site['calibration'], self.site['filter']
         try:
@@ -111,6 +186,9 @@ class Pipeline(Node):
         self.filter_stats = stats
 
     def odom(self, msg):
+        msg = self.prepare('odom', msg)
+        if msg is None:
+            return
         ok = self.accept('odom', msg, 'odom')
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         try:
@@ -122,18 +200,24 @@ class Pipeline(Node):
             return
         # Audit every raw sample but bound ROS TF/normalized odom load to <=50 Hz.
         now = time.monotonic()
-        if ok and self.site['timing']['verified'] and now-self.last_odom_publish >= .02:
+        if ok and now-self.last_odom_publish >= .02:
+            if not self.site['tf'].get('keep_z', False):
+                msg = copy.deepcopy(msg)
+                msg.pose.pose.position.z = 0.
             self.odom_pub.publish(msg)
             self.last_odom_publish = now
 
     def imu(self, msg):
+        msg = self.prepare('imu', msg)
+        if msg is None:
+            return
         # IMU is audited and preserved; no unverified frame conversion or fusion.
         ok = self.streams['imu'].observe(stamp_seconds(msg.header.stamp), time.time(), time.monotonic())
-        if ok and self.site['timing']['verified']:
+        if ok:
             self.imu_pub.publish(msg)
 
     def scan(self, msg):
-        self.accept('scan', msg, 'robot_center')
+        self.accept('scan', msg, 'robot_center' if self.calibrated else 'livox_frame')
         good = [v for v in msg.ranges if math.isfinite(v) and msg.range_min <= v <= msg.range_max]
         self.scan_ratio = len(good)/max(1, len(msg.ranges))
         self.clearance = min(good) if good else 0.
@@ -164,7 +248,12 @@ class Pipeline(Node):
 
     def health(self):
         now = time.monotonic()
-        reasons = []
+        reasons = list(self.warnings)
+        if self.site['timing']['strategy'] == 'offset' and self.offsets['cloud'].expired(now):
+            self.get_logger().error('OFFSET_CALIBRATION_TIMEOUT: cloud fewer than 10 frames in 30s')
+            raise RuntimeError('OFFSET_CALIBRATION_TIMEOUT')
+        if self.resources and self.resources.get('errors'):
+            reasons.extend(self.resources['errors'])
         if not self.calibrated:
             reasons.append('BLOCKED_NEEDS_CALIBRATION')
         if self.count_publishers('/clock'):
@@ -215,7 +304,14 @@ class Pipeline(Node):
         stop_distance = radius+.2+l['vx']*.4+l['vx']**2/(2*l['accel_x'])
         clear = self.clearance > stop_distance
         payload = {'schema_version': 1, 'data_source': self.site['data_source'],
+                   'timestamp_strategy': self.site['timing']['strategy'],
+                   'offsets': {k: {'offset_s': v.offset, 'jitter_s': v.jitter} for k, v in self.offsets.items()},
+                   'resources': self.resources,
+                   'warnings': self.warnings,
+                   'raw_streams': {k: v.report() for k, v in self.raw_streams.items()},
+                   'sampling_sync_verified': self.site['timing']['strategy'] in ('preserve', 'offset') and self.site['timing']['verified'],
                    'healthy': not reasons, 'reasons': sorted(set(reasons)),
+                   'operational_ready': not [r for r in reasons if r not in self.warnings and r != 'BLOCKED_NEEDS_CALIBRATION'],
                    'map_ready': map_ready,
                    'realtime': time.time(), 'uptime_s': now-self.started,
                    'streams': stats, 'scan_finite_ratio': self.scan_ratio,

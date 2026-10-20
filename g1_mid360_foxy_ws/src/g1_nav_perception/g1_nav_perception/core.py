@@ -15,7 +15,7 @@ def finite(values):
 
 
 def quaternion(q):
-    if len(q) != 4 or not finite(q) or abs(sum(x*x for x in q)-1.0) > 0.001:
+    if not isinstance(q, (list, tuple)) or len(q) != 4 or not finite(q) or abs(sum(x*x for x in q)-1.0) > 0.001:
         raise Blocked('invalid unit quaternion')
     return q
 
@@ -27,14 +27,30 @@ def rotate(q, p):
             p[2]+w*tz+x*ty-y*tx)
 
 
-def validate_site(site, full=True):
+def _strict_site(site, full=True):
+    if not isinstance(site, dict):
+        raise Blocked('SITE_INVALID: expected mapping; use installed example defaults')
+    fields = {'live': ('allow_live', 'dry_run'), 'timing': ('strategy', 'max_age_s', 'max_future_s', 'jump_s', 'verified'),
+              'limits': ('vx', 'vy', 'wz', 'accel_x', 'accel_wz', 'command_timeout_s')}
+    if full:
+        fields.update(calibration=('verified', 'evidence_id', 'translation_xyz', 'quaternion_xyzw'),
+                      filter=('verified', 'evidence_id', 'ground_z', 'ground_margin', 'min_height', 'max_height', 'scan_time', 'range_min', 'range_max', 'angle_increment'),
+                      robot=('footprint_verified', 'safe_environment_confirmed', 'blind_spots_reviewed', 'footprint'),
+                      tf=('odom_owner', 'livox_owner'))
+    for section, required in fields.items():
+        if not isinstance(site.get(section), dict) or not set(required).issubset(site[section]):
+            raise Blocked('SITE_INVALID: missing/malformed '+section+'; load through read_site to merge defaults')
+    if 'data_source' not in site:
+        raise Blocked('SITE_INVALID: missing data_source; load through read_site to merge defaults')
     if site['live'] != {'allow_live': False, 'dry_run': True}:
         raise Blocked('LIVE_DISABLED: this release has no SDK write transport')
     if site['data_source'] not in ('REAL_SENSOR', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'):
         raise Blocked('unknown data source')
     t = site['timing']
-    if t['strategy'] != 'preserve':
-        raise Blocked('timestamp repair BLOCKED: clock source not established; preserve only')
+    if t['strategy'] not in ('preserve', 'receive_time', 'offset'):
+        raise Blocked('unsupported timestamp strategy')
+    if t['strategy'] == 'receive_time' and t.get('receipt_time_acknowledged') is not True:
+        raise Blocked('receive_time requires receipt_time_acknowledged=true; receipt time is not acquisition synchronization')
     if not finite([t['max_age_s'], t['max_future_s'], t['jump_s']]) or not (
             0 < t['max_age_s'] <= 0.5 and 0 < t['max_future_s'] <= 0.05 and 0 < t['jump_s'] <= 0.3):
         raise Blocked('unsafe timestamp tolerances')
@@ -46,32 +62,118 @@ def validate_site(site, full=True):
     if not full:
         return site
     for section in ('calibration', 'timing', 'filter'):
-        if site[section]['verified'] is not True or not site[section]['evidence_id'].strip():
+        if (site[section]['verified'] is not True or not isinstance(site[section].get('evidence_id'), str)
+                or not site[section]['evidence_id'].strip()):
             raise Blocked('BLOCKED_NEEDS_CALIBRATION: '+section)
     c, f = site['calibration'], site['filter']
-    if len(c['translation_xyz']) != 3 or not finite(c['translation_xyz']):
+    if not isinstance(c['translation_xyz'], (list, tuple)) or len(c['translation_xyz']) != 3 or not finite(c['translation_xyz']):
         raise Blocked('unknown sensor translation')
     quaternion(c['quaternion_xyzw'])
     if not finite([f['ground_z'], f['ground_margin'], f['min_height'], f['max_height'], f['scan_time'], f['range_min'], f['range_max'], f['angle_increment']]):
         raise Blocked('unknown scan filter/frequency')
-    if not (-3 <= f['ground_z'] <= 1 and .01 <= f['ground_margin'] <= .2
-            and -3 <= f['min_height'] < f['max_height'] <= 3
-            and f['min_height'] >= f['ground_z']+f['ground_margin'] and .08 <= f['scan_time'] <= .2
-            and 0 < f['range_min'] < f['range_max'] <= 20 and 0 < f['angle_increment'] <= .05):
-        raise Blocked('invalid height/range/scan filter')
+    checks = {
+        'ground_z must be within [-3,1] in robot_center': -3 <= f['ground_z'] <= 1,
+        'ground_margin must be within [0.01,0.2]': .01 <= f['ground_margin'] <= .2,
+        'height window must satisfy -3 <= min_height < max_height <= 3': -3 <= f['min_height'] < f['max_height'] <= 3,
+        'min_height must be >= ground_z + ground_margin (robot_center coordinates)': f['min_height'] >= f['ground_z']+f['ground_margin'],
+        'scan_time must be within [0.05,0.3] seconds': .05 <= f['scan_time'] <= .3,
+        'range must satisfy 0 < range_min < range_max <= 20': 0 < f['range_min'] < f['range_max'] <= 20,
+        'angle_increment must be within [0.003,0.05] radians': .003 <= f['angle_increment'] <= .05,
+    }
+    for reason, good in checks.items():
+        if not good:
+            raise Blocked('invalid height/range/scan filter: '+reason)
     r = site['robot']
     if not all(r[k] is True for k in ('footprint_verified', 'safe_environment_confirmed', 'blind_spots_reviewed')):
         raise Blocked('BLOCKED_ENVIRONMENT: footprint, blind spots, stairs/negative obstacles')
     fp = r['footprint']
-    if not isinstance(fp, list) or len(fp) < 3 or any(len(p) != 2 or not finite(p) for p in fp):
+    if not isinstance(fp, list) or len(fp) < 3 or any(not isinstance(p, (list, tuple)) or len(p) != 2 or not finite(p) for p in fp):
         raise Blocked('invalid footprint')
     if any(site['tf'][k] not in ('project', 'external') for k in ('odom_owner', 'livox_owner')):
         raise Blocked('unknown TF ownership')
     return site
 
 
+def validate_site(site, full=True):
+    """Stage 3: startup blocks only on command safety limits; other issues are health warnings."""
+    if not isinstance(site, dict):
+        raise Blocked('SITE_INVALID: expected mapping')
+    limits = site.get('limits', {})
+    vals = [limits.get(k) for k in ('vx', 'vy', 'wz', 'accel_x', 'accel_wz', 'command_timeout_s')]
+    if not finite(vals) or not (0 < vals[0] <= .1 and vals[1] == 0 and 0 < vals[2] <= .15
+            and 0 < vals[3] <= .05 and 0 < vals[4] <= .1 and 0 < vals[5] <= .25):
+        raise Blocked('unsafe command limits: velocity/acceleration/timeout')
+    return site
+
+
+def site_warnings(site):
+    reasons = []
+    try:
+        _strict_site(site)
+    except (Blocked, TypeError, KeyError, AttributeError) as exc:
+        reasons.append(str(exc))
+    for section in ('calibration', 'filter'):
+        if site.get(section, {}).get('verified') is not True:
+            reasons.append('UNVERIFIED_'+section.upper())
+    if site.get('timing', {}).get('strategy') == 'receive_time':
+        reasons.append('DEPRECATED_RECEIVE_TIME')
+    return sorted(set(reasons))
+
+
+class OffsetCalibrator:
+    """Session-local median, no fixed bias. 10 warm-up frames; 30-frame jitter audit."""
+    def __init__(self, start, frames=10, timeout=30.):
+        self.start, self.frames, self.timeout = start, frames, timeout
+        self.deltas = deque(maxlen=30)
+        self.offset = None
+        self.jitter = 0.
+
+    def observe(self, stamp, realtime, monotonic):
+        if not finite((stamp, realtime, monotonic)) or stamp <= 0:
+            return None
+        if self.offset is None and monotonic-self.start >= self.timeout:
+            raise Blocked('OFFSET_CALIBRATION_TIMEOUT: fewer than 10 valid frames within 30s')
+        self.deltas.append(realtime-stamp)
+        if self.offset is None:
+            if len(self.deltas) >= self.frames:
+                self.offset = statistics.median(self.deltas)
+            return None  # All ten calibration frames are withheld.
+        self.jitter = max(self.deltas)-min(self.deltas) if len(self.deltas) == 30 else 0.
+        return stamp+self.offset
+
+    def expired(self, now):
+        return self.offset is None and now-self.start >= self.timeout
+
+
+def assign_stamp(msg, seconds):
+    whole = math.floor(seconds)
+    nanos = round((seconds-whole)*1e9)
+    if nanos == 1000000000:
+        whole, nanos = whole+1, 0
+    msg.header.stamp.sec, msg.header.stamp.nanosec = int(whole), int(nanos)
+
+
 def stamp_seconds(msg):
     return msg.sec + msg.nanosec * 1e-9
+
+
+class ReceiptClock:
+    """Detect host clock steps; never claim to measure sensor transport delay."""
+    def __init__(self, tolerance):
+        self.last = None
+        self.tolerance = tolerance
+        self.failed = False
+
+    def observe(self, realtime, monotonic):
+        if not finite((realtime, monotonic)) or realtime <= 0:
+            self.failed = True
+        if self.last is not None:
+            wall_delta = realtime-self.last[0]
+            mono_delta = monotonic-self.last[1]
+            if wall_delta < 0 or mono_delta < 0 or abs(wall_delta-mono_delta) > self.tolerance:
+                self.failed = True
+        self.last = (realtime, monotonic)
+        return not self.failed
 
 
 class Stream:

@@ -1,0 +1,60 @@
+# Stage 3 formal startup template. COARSE Y-180/z=0.4 from user input; replace after precision calibration.
+# Footprint/filter/environment remain unverified; startup allowed, live motion inhibited by health.
+schema_version: 1
+data_source: REAL_SENSOR
+calibration:
+  verified: false
+  evidence_id: USER_STAGE3_COARSE_NOT_PRECISION_VERIFIED
+  translation_xyz:
+  - 0.0
+  - 0.0
+  - 0.4
+  quaternion_xyzw:
+  - 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+timing:
+  verified: true
+  evidence_id: USER_STAGE3_FIXED_BIAS_PER_SESSION_RUNTIME_MEDIAN
+  strategy: offset
+  receipt_time_acknowledged: false
+  max_age_s: 0.3
+  max_future_s: 0.03
+  jump_s: 0.2
+filter:
+  verified: false
+  evidence_id: INITIAL_FILTER_REQUIRES_G1_VALIDATION
+  ground_z: 0.0
+  ground_margin: 0.05
+  min_height: 0.08
+  max_height: 1.8
+  scan_time: 0.1
+  range_min: 0.15
+  range_max: 8.0
+  angle_increment: 0.008726646
+robot:
+  footprint_verified: false
+  footprint: null
+  safe_environment_confirmed: false
+  blind_spots_reviewed: false
+  provisional_radius: 0.4
+limits:
+  vx: 0.1
+  vy: 0.0
+  wz: 0.15
+  accel_x: 0.05
+  accel_wz: 0.1
+  command_timeout_s: 0.25
+live:
+  allow_live: false
+  dry_run: true
+tf:
+  odom_owner: project
+  livox_owner: project
+  keep_z: false
+diagnostics:
+  window_s: 30.0
+  minimum_cloud_hz: 7.0
+  minimum_odom_hz: 20.0
+  minimum_scan_finite_ratio: 0.01

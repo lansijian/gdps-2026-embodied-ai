@@ -12,7 +12,11 @@ ros2 run g1_nav_perception clock_preflight --duration 30 --output logs/clock-pre
 
 必须核实雷达、odom、IMU 时钟的来源、ROS use_sim_time、系统 epoch 与网络延迟。恒定偏差不等于已经知道原因，三路偏差分布也不能证明采样级同步。先做非侵入排查；任何系统时间/NTP 改动另行现场批准。消息偏差超过 0.3s 过期或超过未来 0.03s 默认阻断；不能扩大到 5 秒掩盖错误。参数有硬上限。
 
-当前只实现 preserve 策略：验证原 stamp 后原样发布 `/g1_nav/cloud_timed`、`/g1_nav/odom`、`/g1_nav/imu`，TF 使用同一 odom header，点云原始数据与话题不修改。任何 fixed_offset/receive_time/auto 策略都会明确 BLOCKED。因为没有真实时钟来源和传输延迟证据，本版本不实现可能掩盖同步错误的重戳。若现场证明设备时间不可信，需要独立设计和验证三源一致的时间映射、漂移/单调性与运动补偿，再审查下一版。
+r2 支持 preserve 与显式 receive_time 两种 dry-run 策略。preserve 验证原 stamp 后原样发布。receive_time 必须配置 receipt_time_acknowledged=true：在 cloud/odom/IMU 回调入口采集主机墙钟，修改消息副本的 header，保留原始消息及话题。独立 raw_streams 保留原始时间偏差、乱序和跳变；sampling_sync_verified 始终 false。主机墙钟与 monotonic 增量差超过 jump_s 或倒退时，粘性阻断全部接收时刻输出，须排查后重启。fixed_offset/auto 仍拒绝。
+
+无参数 sensor_check 自动加载 sensor_audit.yaml，采用接收时刻且不设置任何 verified，预览扫描保持 livox_frame，不造外参、不启 SLAM/Nav2。完整导航仍要求外参、时间、过滤参数和环境的真实证据。该策略下 timing.verified=true 只能表示现场审核了输入排队/传输延迟和三源对齐的 dry-run 适用性，不能代表采样同步。无法从错误 header 推断设备/网络滞留时间，不做 deskew；不确定时保持未验证并阻止导航。
+
+接收时刻模式的规范化 stream offset 只反映本进程之后的延迟；原始 offset 在 raw_streams 中。原始 clock_preflight 遇到坏 stamp 仍应失败，不能因预览能显示就宣称同步通过。sensor inputs 使用明确 BEST_EFFORT KEEP_LAST depth=5，兼容 BEST_EFFORT 与 RELIABLE 发布端；内部 cloud_timed 使用 RELIABLE depth=2，兼容两类订阅。TF 静态订阅保留可靠 TRANSIENT_LOCAL，不能一律改为传感器 QoS。兼容规则见 https://docs.ros.org/en/foxy/Concepts/About-Quality-of-Service-Settings.html 。
 
 所有节点 use_sim_time=false。SYNTHETIC_TEST CI 生成当前墙钟时间，使用独立 domain=87；不将仿真当作真实传感器证据。RECORDED_REPLAY 需要显式隔离测试开关，本版本不支持直接用旧 bag stamp 冒充当前时间；必须保留原 bag 哈希，专门验证回放时间策略后再接入。
 

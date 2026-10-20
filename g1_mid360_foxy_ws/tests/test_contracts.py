@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 import xml.etree.ElementTree as ET
 import pytest
 import yaml
-from g1_nav_perception.core import (Blocked, validate_site, Stream, rotate, points_xyz, DryGate)
+from g1_nav_perception.core import (Blocked, _strict_site as validate_site, Stream, rotate, points_xyz, DryGate)
 from g1_nav_bridge.motion_lock import MotionLock, MotionLockError
 from g1_ros2_bridge.joint_names import JOINT_NAMES
 from g1_nav_perception.cloud import crop
@@ -197,4 +197,4 @@ def test_one_map_tf_owner_and_mature_plugins():
     assert nav['controller_server']['ros__parameters']['FollowPath']['plugin']=='dwb_core::DWBLocalPlanner'
     assert nav['planner_server']['ros__parameters']['GridBased']['plugin']=='nav2_navfn_planner/NavfnPlanner'
     assert 'Spin' not in (ROOT/'src/g1_nav_config/behavior_trees/navigate.xml').read_text(encoding='utf-8')
-    assert len(list((ROOT/'src/g1_nav_bringup/launch').glob('*.launch.py')))==5
+    assert len(list((ROOT/'src/g1_nav_bringup/launch').glob('*.launch.py')))==6

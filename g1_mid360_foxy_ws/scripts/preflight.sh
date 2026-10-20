@@ -3,6 +3,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 log_run preflight
 source_ros
+python3 "$ROOT/scripts/ros_environment.py" --phase rmw --output "$ROOT/logs/preflight-rmw-$$.json"
 failed=0
 uname -a
 cat /etc/os-release

@@ -1,67 +1,27 @@
-# Verification report - 2026-10-20
+# Field fix r2 verification — 2026-10-20
 
-## Scope and immutable boundaries
+本报告只描述 r2 当前修订。没有上传 GitHub、连接 G1、修改系统时间/原厂服务或发出机器人运动命令。SDK 写通道继续缺失，LIVE 不可启用。原始工作树和 Stage 3 工作树没有改动。
 
-Target Ubuntu 20.04 ARM64 / ROS 2 Foxy / CycloneDDS / Unitree G1 EDU 29-DOF / factory MID-360. LIVE DISABLED; SDK write transport is absent, not merely switched off. No robot SSH, motor/FSM command, original driver/service replacement, system clock modification, merge, tag or force push occurred.
+## 本轮已执行
 
-All ROS CI input is **SYNTHETIC_TEST** in isolated domain 87. Native ARM64 container results demonstrate architecture/runtime compatibility; they do not establish G1 firmware/SDK/sensor calibration, real mapping/planning, braking or hardware safety. Original dirty checkout and existing main worktree are preserved.
+- Windows Python 3.11.4：`python -m pytest tests/test_contracts.py tests/test_scripts.py tests/test_field_fixes.py -q`，**112 passed / 0 failed**。前54项原有合同/打包检查，新增58项现场修复回归。
+- 既有仓库 `python -m pytest tests/robot_control tests/navigation -q`：**104 passed / 0 failed**。合计216项通过。
+- 9个 Shell 文件经过实际 Git Bash `bash -n`，全部退出0；部署 PowerShell 经过实际 AST parser，无错误。Shell 源码使用 LF。`git diff --check` 通过。
+- Python3.8 grammar、7个包 manifest、YAML/XML 与 SDK 无写通道检查随合同测试执行；语法兼容不等于 Python3.8 运行/colcon 构建通过。
+- 回归覆盖安全默认值合并（不擦除显式 allow_live=true）、未知外参继续拦截导航、接收时刻明确确认、原始消息不变、原始坏时间诊断保留、主机时钟跳变粘性阻断、QoS对象配置、畸形/大点云拒绝、PGM/PNG超大头/极端分辨率拒绝、launch 自动转换/scan 接线、robot_center 统一、命令隔离、资源监控仅信号自己的进程组。
+- ROS API doubles 用于 portable pytest 的回调/launch/QoS接线测试，**没有模拟出真实 DDS 传输证明**。资源监督的进程 API doubles 也不是 Linux 实机监控验收。新增Conda/Python ABI/混合ROS overlay阻断、SDK DDS解析路径检查、FastDDS显式接线及无Cyclone预载、未来mtime修复范围、ZIP epoch/执行权限回归；实际CLI在当前Windows Conda解释器下按预期返回NATIVE_PYTHON_REQUIRED，未初始化ROS。
+- 新 ZIP/tar.gz 应由 package_workspace.py 生成，逐文件 manifest 校验后交付；实际 archive SHA256 与本地 commit 记录在压缩包旁的 r2-delivery.json。
 
-## Executed local checks
+## 未执行与未确认
 
-- `python -m pytest g1_mid360_foxy_ws/tests/test_contracts.py g1_mid360_foxy_ws/tests/test_scripts.py -q`: **54 passed, 0 failed** on Windows Python 3.11.4. Includes Python 3.8 grammar, 7 package manifests/YAML/XML, 29-joint ZIP metadata hash, quaternion axis/floor calculations, floor-below-body-origin handling, endian/organized PointCloud2 decoding, clock age/future/order/jumps, bounded 30-second statistics, dry-run tripwire SDK zero writes, velocity/acceleration/timeouts, cooperative lock, archive manifest/privacy exclusions, no-import SDK source audit and numeric SVD floor CLI.
-- Existing `python -m pytest tests/robot_control tests/navigation -q`: **104 passed, 0 failed** on this isolated baseline. These do not certify new hardware behavior.
-- All six shell files pass Git Bash `bash -n`; deploy PowerShell script passes the actual PowerShell AST parser. Remote transfer, dependency installation and G1 script execution remain target pending.
-- ZIP SHA256 and unchanged reused joint metadata SHA256 match third_party.lock. Git diff whitespace verification is checked before final delivery.
+本机没有 rclpy/colcon、Docker 或可用 WSL 发行版。本轮未运行新版 ARM64/Foxy colcon、DDS QoS矩阵、完整SLAM/AMCL/Nav2、RViz、Linux资源监督实跑或G1硬件验证。`tests/ros_field_regression.py` 和 `scripts/test_on_foxy.sh` 已提供，尚未执行；不能写成 passed。机器人现场四条底层链路是用户提供的实测反馈，本轮没有重新采集。
 
-## ROS CI evidence
+现场 nav2_fixed.yaml、崩溃栈、内核 OOM/cgroup 日志未提供，**bad_alloc 根因 UNKNOWN**。现有代码局部 costmap 3600 cells 没有明显尺寸爆炸；r2 添加输入/地图分配边界、显式全局初始尺寸、减小DWB候选和资源证据采集，但不能据此声称 G1 上崩溃已经排除。默认保留CycloneDDS，增加显式FastDDS诊断入口但未运行原生A/B，不换自写避障。根据用户追加交接文档，补齐Python环境/DDS库路径/时间戳打包遗漏，详见FIELD_HANDOFF_AUDIT_R2.md；外部DDS路径的检出也不等于bad_alloc已归因。
 
-The dedicated workflow builds all 7 packages under actual Python 3.8/Foxy and discovers all five launch entries. Both x86_64 and native ARM64 use the same pinned Ubuntu 20.04 Foxy image digest; the runner host OS is not the container OS. The workflow records installed ROS versions and uploads logs, maps and JSON results.
+真实xyz/quaternion/地面/footprint/时间同步未知项继续阻断完整导航。默认 sensor_check 只提供 livox_frame 接收时刻预览；receive_time 不证明采样同步，不支持真实运动。现场需要重建新overlay并验证30秒门禁、生命周期、真实地图、Nav2 Action、动态障碍与故障归零。
 
-Earlier integration runs exposed and corrected POSIX lock initialization, wrong OccupancyGrid dimension access, Foxy's integer millisecond map-saver timeout, Foxy ComputePathToPose.pose action field and premature goals before ACTIVE lifecycle states. Earlier failures remain visible in Git/CI history and local logs/ci. No earlier failed run is relabelled as passed.
+## 历史基线，仅作追溯
 
-Validated representative-load run: https://github.com/lansijian/gdps-2026-embodied-ai/actions/runs/39376281980 at 7fcbe0c9d3d91d049baaa736c1f7d3c1bd62be7f. Both native ARM64 and x86_64 jobs passed: 54 contract/script tests, 3 real negative launch checks, 27 ROS integration checks, 7 packages built and all 5 launch entries discovered. This final code run includes the unsupported-layout failure case, refusal of pre-existing map TF ownership, isolated cmd_vel routing and strict no-crash shutdown checks; all passed.
+旧基线代码 `7fcbe0c9d3d91d049baaa736c1f7d3c1bd62be7f` 曾在原生ARM64/x86_64的Ubuntu20.04/Foxy容器分别通过54项合同、3项负向启动、27项ROS集成。原报告保留在 history/VERIFICATION_BASELINE_20261020.md，原始摘要在 docs/ci/release.json。那些结果只适用于旧代码，不是r2通过证明。相关退出时RMW卸载缓解也不能直接解释本轮现场bad_alloc。
 
-The workload is explicitly synthetic: 20,064 points / 32-byte stride at 10Hz, odom timer configured 800Hz, IMU 200Hz. Geometry is repeated to represent processing volume, not real MID-360 angular coverage. Actual receiver observations (BEST_EFFORT can drop packets):
-
-| Native architecture | cloud Hz | raw odom received Hz | IMU Hz | scan Hz | scan header-to-receipt P95 | finite scan ratio |
-|---|---:|---:|---:|---:|---:|---:|
-| arm64 | 10.000 | 721.700 | 200.000 | 10.000 | 16.22ms | 97.36% |
-| x86_64 | 10.000 | 657.391 | 196.603 | 10.004 | 31.59ms | 97.36% |
-
-These are VM/container synthetic observations, not G1 performance or real clock synchronization evidence. Full metrics and all individual ROS check names are in docs/ci/. Downloaded artifact SHA256 values were checked against GitHub metadata; local logs/release-arm64 and logs/release-x86_64 preserve the archives, maps, pose graphs, installed package versions and logs. Source archives deliberately exclude runtime logs and site configuration.
-
-Shutdown diagnosis found CycloneDDS receive threads active during librmw_implementation's library unloading (GDB recvMC/ddsrt_recvmsg and dlclose stacks). A per-process LD_PRELOAD reference to the exact installed CycloneDDS RMW is applied only to this workspace's SLAM/controller child processes; no system library, factory service or SDK factory method is modified. Both architectures subsequently passed explicit no-crash assertions for SLAM and Nav2 shutdown. Nav2 is first deactivated/cleaned/shut down using its lifecycle managers. This is a bounded process-lifetime mitigation, not a claim that the upstream object-lifetime issue is fixed. Primary related report: https://github.com/ros2/rclcpp/issues/2567.
-
-The raw Nav2 command is isolated at /g1_nav/cmd_vel_nav2, with preview at /g1_nav/cmd_vel_safe and recovery command output separately disabled. The integration test verifies no global /cmd_vel publisher. LIVE remains absent. Layouts other than little-endian FLOAT32 XYZ are rejected before official cloud-to-scan receives them; the offline/vectorized decoder can support additional layouts without falsely claiming Foxy's converter does.
-
-No debugger is used in the normal representative-load acceptance run. Debug prefix is opt-in via G1_NAV_DEBUG_SLAM=1 for diagnosis only.
-
-## Launch coverage
-
-| Entry | Evidence scope |
-|---|---|
-| sensor_check.launch.py | Installed/discovered; shared sensor pipeline is exercised by ROS integration; standalone target run pending |
-| mapping.launch.py | Synthetic full startup, 30s runtime gate, SLAM map/save exercised |
-| localization.launch.py | Installed/discovered; same AMCL/map-server path exercised inside navigation_dryrun; standalone target run pending |
-| navigation_dryrun.launch.py | Synthetic lifecycle/action/costmap/command/fault acceptance harness; final result below |
-| g1_nav_bringup.launch.py | Installed/discovered; actual negative launch checks block live, missing site and unknown calibration; positive behavior shares the mode implementation |
-
-`--show-args` success means launch discovery only, not positive sensor/map acceptance. Unknown site parameters prevent real positive runs by design.
-
-## Unverified and hard blockers
-
-**BLOCKED_NEEDS_CALIBRATION / ROBOT_VERIFICATION_PENDING**: full robot_center->livox_frame xyz + quaternion + axis evidence; real body-frame floor_z/margin, height window and low/table-edge retention; actual robot footprint; measured scan_time/frequency/QoS; real sensor/odom/IMU time sources, offsets/jumps/latency and same-clock proof; current interface/domain/CycloneDDS config; actual dog_odom semantics/unique TF; real map/localization convergence/path/costmap/dynamic obstacle behavior; G1 CPU load, blind spots, stairs/negative obstacles, stopping distance; target installation/build/launch logs.
-
-**BLOCK LIVE**: real installed SDK signature/version and read-only FSM result, hardware emergency stop/fall protection, unique hardware motion authority, independent watchdog resistant to SDK stalls, site authorization and progressive physical speed/braking tests are incomplete. No SetVelocity/Move/StopMove backend is enabled or supplied as an executable. Non-preserve timestamp repair strategies are explicitly blocked pending real clock evidence.
-
-## GitHub delivery restriction
-
-Feature branch pushes through the existing authenticated SSH identity succeeded. PR creation was attempted through the GitHub connector (403 Resource not accessible by integration) and a narrowly scoped repository workflow (403 GitHub Actions is not permitted to create or approve pull requests). Repository permissions were not changed. The temporary PR workflow job was removed. **No PR was created and no PR URL is claimed.** PR_BODY.md and the GitHub compare/create link provide a concrete reviewable handoff. Main remains unchanged.
-
-## Final outcome
-
-- **Windows**: 54 new contract/script tests + 104 existing robot/navigation regressions passed, 0 failed.
-- **Native ARM64 Foxy / native x86_64 Foxy**: each 54 contract/script tests + 3 negative launch checks + 27 ROS integration checks passed, 0 failed; each built 7 packages and discovered 5 entry points. Final normal launches run without gdb.
-- Actual maps and pose graphs were saved, AMCL map reloaded, all six Nav2 lifecycle nodes reached ACTIVE, Navfn action returned a nonempty path, DWB produced isolated command output and preview, a new obstacle was marked in local costmap, required data/clock/TF/heartbeat faults inhibited preview with explicit reasons, SDK writes remained 0, and both SLAM/Nav2 shut down without process crashes.
-- CI summaries under docs/ci are synthetic evidence only. The delivery documentation commit may follow this tested code commit; src/scripts/tests/workflow must remain byte-identical to the validated code for this evidence to apply.
-- Robot hardware, target transfer/install/build/launch and LIVE acceptance remain pending. PR remains blocked by the documented 403 permission restrictions; no PR URL exists.
+本轮交付的运行/安装命令见 FIELD_FIX_R2.md。不会为通过测试填写虚构外参、初始位姿或地图。未部署、未push、未创建PR。

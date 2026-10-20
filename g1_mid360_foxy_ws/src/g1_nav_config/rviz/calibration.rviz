@@ -19,26 +19,6 @@ Visualization Manager:
     Enabled: true
     Show Axes: true
     Show Names: true
-  - Class: rviz_default_plugins/PointCloud2
-    Name: Original time-validated cloud
-    Enabled: true
-    Topic:
-      Value: /g1_nav/cloud_timed
-      Depth: 5
-      History Policy: Keep Last
-      Reliability Policy: Best Effort
-      Durability Policy: Volatile
-    Size (m): 0.02
-  - Class: rviz_default_plugins/PointCloud2
-    Name: Calibrated height-filtered obstacles
-    Enabled: true
-    Topic:
-      Value: /g1_nav/cloud_obstacles
-      Depth: 5
-      History Policy: Keep Last
-      Reliability Policy: Best Effort
-      Durability Policy: Volatile
-    Size (m): 0.03
   - Class: rviz_default_plugins/LaserScan
     Name: Official scan
     Enabled: true
@@ -48,6 +28,7 @@ Visualization Manager:
       History Policy: Keep Last
       Reliability Policy: Best Effort
       Durability Policy: Volatile
+    Decay Time: 0.0
   - Class: rviz_default_plugins/Map
     Name: Real map
     Enabled: true
@@ -66,6 +47,7 @@ Visualization Manager:
       History Policy: Keep Last
       Reliability Policy: Reliable
       Durability Policy: Volatile
+    Decay Time: 0.0
   Tools:
   - Class: rviz_default_plugins/Interact
   - Class: rviz_default_plugins/MoveCamera

@@ -1,0 +1,6 @@
+# Runs without measured physical extrinsics; /scan is a raw livox_frame preview.
+# Explicitly requested receipt stamping. Does NOT prove acquisition synchronization.
+timing:
+  strategy: receive_time
+  receipt_time_acknowledged: true
+# Other fields merge from site.example.yaml. Nothing is marked verified.

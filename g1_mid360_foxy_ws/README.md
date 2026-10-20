@@ -2,12 +2,14 @@
 
 Target: Ubuntu 20.04 ARM64, Python 3.8, ROS 2 Foxy, CycloneDDS. LIVE is DISABLED in code: no Unitree SDK import, Unitree DDS motion writer, FSM or motion service is installed. /g1_nav/cmd_vel_safe is a preview topic, never a hardware command.
 
+**Field fix r2:** Read [two-terminal instructions](docs/FIELD_FIX_R2.md) and [current verification](docs/VERIFICATION_REPORT.md) first. Prior ARM64 CI evidence applies only to the older baseline, not this revision.
+
 Read docs/DEPLOY_FOXY_ARM64.md before use. Unknown calibration/timing/footprint/environment defaults block downstream. This is a navigation engineering candidate, not a hardware safety certification. Real robot validation is pending.
 
 | Package | Responsibility |
 |---|---|
 | g1_nav_bringup | Five integrated launch entry points; sensor preflight process gates downstream |
-| g1_nav_perception | Raw timestamp/QoS audit, preserve-only normalized streams, calibrated cloud filtering, scan/TF/data health and diagnostics |
+| g1_nav_perception | Raw timestamp/QoS audit, preserve or explicit receipt-time streams, calibrated cloud filtering, scan/TF/data health and diagnostics |
 | g1_nav_tf | Measured dog_odom to dynamic TF and verified quaternion sensor TF |
 | g1_nav_tf_authority | Foxy rclcpp duplicate GID/parent/cycle audit |
 | g1_nav_bridge | Shared exclusive motion lock, finite/bounds checks, acceleration/timeout gate, SDK-free preview |
@@ -18,4 +20,4 @@ Data: factory cloud -> timestamp/frame gate -> cloud_timed -> official pointclou
 
 The pipeline keeps an active scan subscriber, emits /g1_nav/health and /diagnostics at 10 Hz, including frequency/offset P95, ordering/jumps, finite scan ratio, TF authority and cloud retention. The independent dry bridge's 20 Hz timer fails to zero on health/command timeout. There is no SDK worker that could block the timer. This does not implement the independent physical emergency stop needed for LIVE.
 
-Local tests: python -m pytest tests/test_contracts.py tests/test_scripts.py -q. Foxy integration: isolated ROS_DOMAIN_ID=87 G1_NAV_TEST_ONLY=1 python3 tests/ros_integration.py after building/sourcing; SYNTHETIC_TEST only. Never run fixtures in a robot domain.
+Local tests: python -m pytest tests/test_contracts.py tests/test_scripts.py tests/test_field_fixes.py -q. Foxy integration: isolated ROS_DOMAIN_ID=87 G1_NAV_TEST_ONLY=1 python3 tests/ros_integration.py after building/sourcing; SYNTHETIC_TEST only. Never run fixtures in a robot domain.

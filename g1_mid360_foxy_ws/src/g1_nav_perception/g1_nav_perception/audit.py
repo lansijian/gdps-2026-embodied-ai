@@ -51,6 +51,7 @@ def main(args=None):
 class Gate(Node):
     def __init__(self):
         super().__init__('g1_nav_runtime_preflight')
+        self.declare_parameter('basic_only', False)
         self.declare_parameter('duration_s', 30.)
         self.declare_parameter('timeout_s', 45.)
         self.declare_parameter('minimum_cloud_hz', 7.)
@@ -71,7 +72,15 @@ class Gate(Node):
 
     def ready(self):
         h = self.last or {}; now = time.monotonic()
-        good = (h.get('healthy') is True and self.received is not None and
+        if self.get_parameter('basic_only').value:
+            cloud = h.get('streams', {}).get('cloud', {})
+            good = (self.received is not None and now-self.received < .3 and
+                    cloud.get('hz',0) >= self.get_parameter('minimum_cloud_hz').value and
+                    not cloud.get('reason') and cloud.get('count',0)>0)
+            if not good:self.since=None
+            elif self.since is None:self.since=now
+            return self.since is not None and now-self.since>=self.get_parameter('duration_s').value
+        good = (h.get('operational_ready', h.get('healthy')) is True and self.received is not None and
                 now-self.received < .3 and self.count_publishers('/g1_nav/health') == 1)
         self.gate_reason = ''
         if self.get_parameter('require_unowned_odom').value and 'odom' in h.get('tf_edges', {}):
