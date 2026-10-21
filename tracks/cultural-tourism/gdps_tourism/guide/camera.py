@@ -34,6 +34,7 @@ class CameraConfig:
     video_path: Optional[str] = None
     min_accept_confidence: float = 0.0
     image_topic: Optional[str] = None  # ROS 图像话题（优先于 /dev/video*，由导航/相机模块发布）
+    flip: str = "none"  # G1 头部 RealSense 倒装: none | 180 | hflip | vflip
 
 
 class ExhibitCamera:
@@ -99,7 +100,17 @@ class ExhibitCamera:
     def _grab(self):
         if self._source is None:
             raise RuntimeError("camera not started")
-        return self._source.read()
+        frame = self._source.read()
+        if frame is None:
+            return None
+        flip = (self.config.flip or "none").strip().lower()
+        if flip == "180":
+            return frame[::-1, ::-1].copy()
+        if flip == "hflip":
+            return frame[:, ::-1].copy()
+        if flip == "vflip":
+            return frame[::-1].copy()
+        return frame
 
     def _match_frame(self, frame) -> Tuple[Optional[str], float, Optional[str]]:
         if self._matcher is None:

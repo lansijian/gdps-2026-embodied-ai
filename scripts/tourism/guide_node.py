@@ -203,6 +203,7 @@ async def async_main(args: argparse.Namespace) -> int:
                 video_path=args.video,
                 min_accept_confidence=args.min_confidence,
                 image_topic=args.image_topic,
+                flip=args.flip,
             )
         )
         camera.start(
@@ -441,6 +442,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", default=None)
     parser.add_argument("--video", default=None, help="replay video instead of a camera (dry dev)")
     parser.add_argument("--image-topic", default=None, help="ROS sensor_msgs/Image topic (instead of /dev/video*)")
+    parser.add_argument("--flip", choices=("none", "180", "hflip", "vflip"), default="none",
+                        help="G1 head RealSense is mounted upside-down: use 180")
     parser.add_argument("--action-name", default="/navigate_to_pose", help="Nav2 NavigateToPose action")
     parser.add_argument("--visual-target-topic", default="/tourism/visual_target")
     parser.add_argument("--vision-nav", action="store_true", help="enable vision-triggered navigation")

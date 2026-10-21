@@ -27,10 +27,10 @@ check_occupation() {
     say "0. videohub 占用检查"
     if ps aux | grep -i videohub | grep -v grep; then
         echo "⚠️  videohub 正在占用相机(带看门狗, 单纯 pkill 会复活)"
-        echo "   自己的机器可执行(会关闭官方图传):"
-        echo "     sudo mv /usr/bin/videohub_pc4 /usr/bin/videohub_pc4.bak"
-        echo "     sudo mv /usr/bin/videohub_pc4_chest /usr/bin/videohub_pc4_chest.bak"
+        echo "   自己的机器可执行(会关闭官方图传; 本机二进制在 /unitree/module/video_hub_pc4/):"
         echo "     sudo pkill -9 -f videohub"
+        echo "     sudo mv /unitree/module/video_hub_pc4/videohub_pc4 /unitree/module/video_hub_pc4/videohub_pc4.bak"
+        echo "   恢复图传: 把上面的 .bak 改回原名并重启 master_service 对应服务"
         echo "   借来的机器建议先和机主确认再动。处理完重跑本脚本。"
         exit 1
     else
@@ -73,6 +73,28 @@ apply_power() {
     echo "✅ 完成(运行时生效, 重启失效; 永久生效跑: bash $0 persist)"
 }
 
+# ---------- 2.5 自动识别彩色节点(不写死 video4) ----------
+find_color_node() {
+    COLOR_NODE=""
+    for candidate in /dev/video4 /dev/video2 /dev/video0 /dev/video*; do
+        [ -e "$candidate" ] || continue
+        if command -v v4l2-ctl >/dev/null 2>&1; then
+            if v4l2-ctl -d "$candidate" --list-formats-ext 2>/dev/null | grep -q "YUYV"; then
+                COLOR_NODE="$candidate"
+                break
+            fi
+        else
+            COLOR_NODE="$candidate"
+            break
+        fi
+    done
+    if [ -z "$COLOR_NODE" ]; then
+        echo "⚠️  未找到 YUYV 彩色节点, 保守使用 /dev/video4"
+        COLOR_NODE="/dev/video4"
+    fi
+    echo "✅ 彩色节点: $COLOR_NODE"
+}
+
 # ---------- 3. 检查节点 & 出流自检 ----------
 verify() {
     say "3. 视频节点检查"
@@ -83,14 +105,23 @@ verify() {
         exit 1
     fi
     echo "$NODES"
+    find_color_node
     if command -v gst-launch-1.0 >/dev/null; then
-        say "4. 出流自检 (video4 彩色流 640x480@30, 5秒)"
-        if timeout 8 gst-launch-1.0 v4l2src device=/dev/video4 ! \
-            "video/x-raw,format=YUY2,width=640,height=480,framerate=30/1" ! fakesink; then
-            echo "✅ 30FPS 出流正常"
-        else
-            echo "⚠️  30FPS 失败。查链路速率: lsusb -t (480M=USB2.0降速, 重插Type-C)"
-            echo "   或退档测试: 把 framerate=30/1 改成 15/1 再试"
+        say "4. 出流自检 ($COLOR_NODE 彩色流, 5秒)"
+        ok=0
+        for spec in "640 480 30" "640 360 30" "640 480 15"; do
+            set -- $spec
+            echo "   尝试 width=$1 height=$2 fps=$3 ..."
+            if timeout 8 gst-launch-1.0 -q v4l2src device="$COLOR_NODE" num-buffers=20 ! \
+                "video/x-raw,format=YUY2,width=$1,height=$2,framerate=$3/1" ! fakesink >/dev/null 2>&1; then
+                echo "✅ 出流正常 (width=$1 height=$2 fps=$3)"
+                ok=1
+                break
+            fi
+        done
+        if [ "$ok" -eq 0 ]; then
+            echo "⚠️  出流失败。查链路速率: lsusb -t (480M=USB2.0降速, 重插Type-C)"
+            echo "   若内核日志是 -71/device not responding: 拔插 Type-C 后再跑本脚本"
         fi
     fi
 }
@@ -122,11 +153,11 @@ view() {
     say "实时画面 (640x480@30)"
     IP=$(hostname -I | awk '{print $1}')
     echo "在电脑浏览器打开: http://$IP:8080   (Ctrl+C 退出)"
-    python3 << 'PYEOF'
-import cv2, time, threading
+    COLOR_NODE="$COLOR_NODE" python3 << 'PYEOF'
+import cv2, os, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PIPE = "v4l2src device=/dev/video4 ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! queue leaky=downstream max-size-buffers=1 ! appsink"
+PIPE = "v4l2src device=%s ! video/x-raw,format=YUY2,width=640,height=480,framerate=30/1 ! videoconvert ! queue leaky=downstream max-size-buffers=1 ! appsink" % os.environ.get("COLOR_NODE", "/dev/video4")
 
 latest = [None]
 lock = threading.Lock()
@@ -165,20 +196,45 @@ class H(BaseHTTPRequestHandler):
         pass
 
 cap = cv2.VideoCapture(PIPE, cv2.CAP_GSTREAMER)
-assert cap.isOpened(), "cannot open /dev/video4"
+assert cap.isOpened(), "cannot open colour node"
 threading.Thread(target=grab, args=(cap,), daemon=True).start()
 ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
 PYEOF
 }
 
+# ---------- 状态(只读) ----------
+status() {
+    say "相机状态(只读)"
+    echo "-- USB --"
+    lsusb | grep -iE "intel|$VID"
+    lsusb -t 2>/dev/null | grep -A2 -B1 "Video" | head -8
+    echo "-- nodes --"
+    ls -l /dev/video* 2>&1 | head -8
+    for candidate in /dev/video4 /dev/video2 /dev/video0; do
+        [ -e "$candidate" ] || continue
+        echo "-- $candidate formats --"
+        v4l2-ctl -d "$candidate" --list-formats-ext 2>/dev/null | head -10
+    done
+    echo "-- power --"
+    for d in /sys/bus/usb/devices/2-2.3 /sys/bus/usb/devices/2-2; do
+        [ -e "$d/power/control" ] || continue
+        echo "$d control=$(cat "$d/power/control") autosuspend=$(cat "$d/power/autosuspend")"
+    done
+    echo "usbfs_memory_mb=$(cat /sys/module/usbcore/parameters/usbfs_memory_mb 2>/dev/null)"
+    echo "-- kernel --"
+    journalctl -k --no-pager 2>/dev/null | grep -iE "uvc|realsense|2-2.3" | tail -6
+}
+
 # ---------- 入口 ----------
 case "${1:-}" in
+    status)  status ;;
     restore) restore ;;
     view)    view ;;
     persist) check_occupation; find_cam; apply_power; verify; persist ;;
     *)       check_occupation; find_cam; apply_power; verify
              echo
              echo "完成。下一步:"
+             echo "  只读状态  : bash $0 status"
              echo "  看实时画面: bash $0 view"
              echo "  永久生效  : bash $0 persist"
              echo "  还原出厂  : bash $0 restore"

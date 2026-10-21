@@ -138,3 +138,48 @@ G1 上若偏慢，按顺序调：`--match-every 3` -> `--prefilter-top-k 2` -> �
 - 未在真实 G1 / 真实展馆光照下验证；模板为固定视角照片，现场需按样本复核阈值。
 - 开机自启可用 systemd user service 包一层上面的启动命令（`loginctl enable-linger $USER`）。
 - 若使用 G1 机身自带相机（走 Unitree SDK 而非 V4L2/RealSense），需要在 `camera/` 下新增取帧适配器。
+## 8. G1 实机探测记录（2026-10-21，只读）
+
+环境：Jetson Orin 类 aarch64 / 8 核 / 15G 内存，Ubuntu 20.04.6，Python 3.8.10。
+
+| 项 | 实测 |
+| --- | --- |
+| OpenCV | 4.2.0（apt），**无 SIFT** → 现场固定 `--method orb`（代码会自动回退并告警） |
+| 其它依赖 | numpy 1.24.4、websockets 13.1、Pillow 7.0（无 getbbox，HUD 预览需升级）、unitree_sdk2py 1.0.1 |
+| ROS | Foxy + CycloneDDS，环境脚本 `~/g1_nav2_ws/.deps/environment.bash`；`/dog_odom` 1034Hz |
+| 地图 | `~/g1_nav2_ws/maps/site.pgm` 777×732 @0.05m，origin (-20.1,-19.6)；AMCL 初始位姿已保存 |
+| 相机 | RealSense D435i UVC：彩色 `/dev/video4`（YUYV）、灰度 `/dev/video2`；**头部倒装，需 `--flip 180`** |
+| 相机稳定性 | USB 自动挂起会导致 `error -71 / device not responding` 掉线；先跑 `bash scripts/tourism/g1_camera_fix.sh`（临时）或 `persist`（永久，需 sudo） |
+| 音频 | 麦克风组播 239.168.123.161:5555 有数据（5120B/包，约 6.3 包/秒）；`AudioClient` 可导入 |
+| 网络 | 可访问 `openspeech.bytedance.com`（TLS 正常） |
+
+**实测性能（真实 29 张模板，G1 CPU，bench_camera 合成场景）**：
+
+| 模式 | 结果 |
+| --- | --- |
+| 模板库构建 | 5.3s（启动一次性） |
+| ORB + 粗筛（默认） | mean 93.2ms / median 80.2ms / p95 214ms |
+| ORB 全量（对照） | 约 248ms |
+| 准确率 | exhibit_top1=1.000、topk=1.000、accept_rate=1.000、false_accepts=0 |
+
+结论：30fps 相机 + `match_every 2` 会超过 CPU 能力（约 10 次/秒上限），建议现场 `--match-every 3`；
+或把采集分辨率降到 960×540 / 640×480。
+
+**机器人上部署（已验证）**：
+
+```bash
+# 开发机（仓库根目录）
+rsync -az --exclude .git --exclude __pycache__ ./ unitree@192.168.123.164:~/tourism_guide/
+rsync -az /path/to/templates/*.jpg /path/to/templates/knowledge_base.json \
+  unitree@192.168.123.164:~/tourism_guide/templates/
+# 机器人上
+cd ~/tourism_guide
+python3 -m unittest discover -s tests/cultural_tourism      # 56 项通过
+python3 scripts/tourism/guide_node.py --dry-run \
+  --stations tracks/cultural-tourism/configs/stations.example.yaml \
+  --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.json
+python3 scripts/tourism/check_camera.py --camera 4 --flip 180 \
+  --match-templates templates
+```
+
+注意：厂商 `videohub` 二进制当前是 `.bak`（被禁用，可能是导航组为让出相机）；如需官方图传，需与导航组确认后再恢复。

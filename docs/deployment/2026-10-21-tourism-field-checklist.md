@@ -13,6 +13,22 @@
 ## 1. 相机
 
 ```bash
+# 只读状态（不修改任何东西）
+bash scripts/tourism/g1_camera_fix.sh status
+
+# 修复 USB 自动挂起/掉线（需要 sudo 密码）
+bash scripts/tourism/g1_camera_fix.sh            # 临时生效
+bash scripts/tourism/g1_camera_fix.sh persist    # 永久生效（推荐）
+
+# 只读自检 + 抓一帧 + 可选识别（彩色节点 /dev/video4，头部倒装用 --flip 180）
+python3 scripts/tourism/check_camera.py --camera 4 --flip 180 \
+  --match-templates ~/tourism_guide/templates
+```
+
+预期：`[camera] captured ... shape=(480, 640, 3)`，识别结果 `accepted` 或 `unknown_reason` 合理。
+若内核日志是 `error -71 / device not responding`：拔插 Type-C 后重跑修复脚本。
+
+```bash
 # A. ROS 图像话题（等队友给话题名后替换）
 ros2 topic list | grep -i image
 ros2 topic hz /camera/color/image_raw
@@ -85,7 +101,7 @@ export GDPS_TOURISM_TEMPLATES=...; export DOUBAO_API_KEY=...
 python3 scripts/tourism/guide_node.py \
   --stations tracks/cultural-tourism/configs/stations.g1.yaml \
   --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.json \
-  --image-topic /camera/color/image_raw \
+  --camera 4 --flip 180 \
   --greeting --autostart --log-dir logs/tourism
 ```
 
