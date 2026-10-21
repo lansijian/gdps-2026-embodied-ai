@@ -122,6 +122,20 @@ python3 scripts/tourism/guide_node.py ... --offline --offline-audio-dir assets/n
 - 运行中豆包连接/合成失败会自动切到本地 wav（FallbackDialogue），导航与 END 信号不受影响；
 - 离线模式没有 ASR，游客语音意图不可用（降级为固定流程 + 超时自动推进）。
 
+
+## 10.1 时间预算与演练（不需要机器人）
+
+```bash
+# 用真实讲解词 + 预生成音频时长，估算 30 分钟是否够
+python3 scripts/tourism/guide_rehearsal.py \
+  --knowledge /path/to/exhibit_templates/knowledge_base.json \
+  --manifest assets/narration/manifest.json \
+  --budget-s 1800 --reserve-s 180 --listen-s 8
+```
+
+占位配置的测算结果：8 站环线约 **13.5 分钟**（讲解 5-131s、聆听 8s/站、步行按 eta_s 差）；
+说明时间有富余，但个别长讲解（汇丰铜狮 131s）超过默认 `--narration-max-s 120`，现场建议：
+`--narration-max-s 150`（预算充足时按剩余时间动态收紧），或把长讲解拆成两段。
 ## 9. 待补（不阻塞联调）
 
 - 站点真实坐标与环线顺序（现场建图后）；

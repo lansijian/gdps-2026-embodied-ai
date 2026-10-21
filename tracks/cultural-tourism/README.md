@@ -76,3 +76,32 @@ python3 scripts/tourism/match_webcam.py --templates "$GDPS_TOURISM_TEMPLATES" \
 
 - 已在 macOS（AVFoundation）与无显示器 Linux 路径上用合成场景/录像回放验证；真实 G1 摄像头与真实 Python 3.8 运行时尚未实机验证。
 - 模板为固定视角照片，现场光照/反光/大角度需要按采集样本再调阈值。
+## 导览工作流（2026-10-21 加入）
+
+`gdps_tourism/guide/` 实现了「导航到点 → 视觉识别 → 豆包讲解互动 → 游客意图 → END 信号」全流程：
+
+- `flow.py` 状态机：迎宾/导航/到达/识别/讲解/聆听，语音（FC）与视觉（内部循环 / `/tourism/visual_target`）均可触发导航；
+- `orchestrator.py` + `ros2_adapters.py`：标准 Nav2 `NavigateToPose`、`/tourism/guide_event`（END）、`/tourism/start`、ROS 图像话题；
+- `doubao_realtime.py`：豆包端到端实时语音（session.update 换场景、response.cancel 打断、Function Calling、预置讲解词原样朗读）；
+- `budget.py`：30 分钟任务预算（讲解超时自动推进）；
+- `offline_audio.py` + `scripts/tourism/prepare_fallback_audio.py`：断网/额度用尽时本地 wav 兜底；
+- 接口契约：`docs/interfaces/tourism-guide.md`；沿途讲解分段表：`docs/deployment/2026-10-21-tourism-route-briefs.md`。
+
+```bash
+# 无 ROS 全流程演练
+python3 scripts/tourism/guide_node.py --dry-run \
+  --stations tracks/cultural-tourism/configs/stations.example.yaml \
+  --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.example.json
+
+# 30 分钟时间预算测算（不需要机器人）
+python3 scripts/tourism/guide_rehearsal.py \
+  --knowledge /path/to/knowledge_base.json \
+  --manifest assets/narration/manifest.json
+
+# 机器人上（导航栈已启动，先单图验收相机）
+export GDPS_TOURISM_TEMPLATES=$HOME/exhibit_templates
+export DOUBAO_API_KEY=...
+python3 scripts/tourism/guide_node.py --stations ... --knowledge ... --greeting
+```
+
+测试：`python3 -m unittest discover -s tests/cultural_tourism`（45 项，无需 ROS/摄像头）。
