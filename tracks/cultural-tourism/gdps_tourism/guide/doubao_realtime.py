@@ -82,6 +82,9 @@ class NullAudioIO:
     def stop_playback(self) -> None:
         pass
 
+    def pending_bytes(self) -> int:
+        return 0
+
     def set_muted(self, muted: bool) -> None:
         # mute is for the microphone uplink only; speaker playback must continue
         self.muted = bool(muted)
@@ -116,6 +119,9 @@ class G1AudioIO:
         self._play_lock = threading.Lock()
         self._muted = False
         self._threads: List[threading.Thread] = []
+        self.play_calls = 0
+        self.pcm_bytes = 0
+        self._last_fill = 0.0
 
     # -- setup -------------------------------------------------------------
     def _find_network(self) -> tuple:
@@ -182,8 +188,15 @@ class G1AudioIO:
         # mic mute must not silence the speaker
         if self._audio is None:
             return
+        self.play_calls += 1
+        self.pcm_bytes += len(pcm_24k)
         with self._play_lock:
             self._play_buf.extend(pcm_24k)
+            self._last_fill = time.monotonic()
+
+    def pending_bytes(self) -> int:
+        with self._play_lock:
+            return len(self._play_buf)
 
     def stop_playback(self) -> None:
         with self._play_lock:
@@ -208,20 +221,27 @@ class G1AudioIO:
         need_16k = int(G1_RATE * self.PLAY_CHUNK_MS / 1000) * 2
         need_24k = need_16k * 3 // 2
         while self._running:
+            chunk = None
             with self._play_lock:
                 if len(self._play_buf) >= need_24k:
                     chunk = bytes(self._play_buf[:need_24k])
                     del self._play_buf[:need_24k]
-                else:
-                    chunk = None
+                elif (
+                    self._play_buf
+                    and time.monotonic() - self._last_fill > 0.35
+                ):
+                    # flush the tail (< 50 ms) once the stream has gone quiet
+                    chunk = bytes(self._play_buf)
+                    self._play_buf.clear()
             if chunk is None:
                 time.sleep(0.01)
                 continue
             try:
-                self._audio.PlayStream(self.app_name, "guide", resample_24k_to_16k(chunk))
+                if self._audio is not None:
+                    self._audio.PlayStream(self.app_name, "guide", resample_24k_to_16k(chunk))
             except Exception:
                 pass
-            time.sleep(self.PLAY_CHUNK_MS / 1000)
+            time.sleep(len(chunk) / (24000.0 * 2.0))
 
     def stop(self) -> None:
         self._running = False
@@ -466,7 +486,9 @@ class DoubaoRealtimeClient:
                     await self.mute()
             elif event.kind == "audio.done":
                 if self.config.mute_during_playback and self._muted:
-                    await self.unmute()
+                    # The server finishes streaming before the local speaker drains;
+                    # keep the mic muted until the playback buffer is empty.
+                    asyncio.ensure_future(self._unmute_when_drained())
             elif event.kind == "audio.delta":
                 audio_b64 = str(event.payload.get("delta") or "")
                 if audio_b64:
@@ -476,6 +498,19 @@ class DoubaoRealtimeClient:
                     await self._on_event(event)
                 except Exception as exc:  # pragma: no cover - handler failure
                     await self._emit_error("event_handler_failed: %s" % exc)
+
+    async def _unmute_when_drained(self, timeout_s: float = 30.0) -> None:
+        pending = getattr(self.audio, "pending_bytes", None)
+        deadline = time.monotonic() + timeout_s
+        while pending is not None and time.monotonic() < deadline:
+            try:
+                if float(pending()) <= 0.0:
+                    break
+            except Exception:
+                break
+            await asyncio.sleep(0.05)
+        if self._muted:
+            await self.unmute()
 
     async def _emit_error(self, message: str) -> None:
         if self._on_error is not None:

@@ -146,7 +146,15 @@ async def run(args) -> int:
                 await asyncio.wait_for(done.wait(), timeout=args.timeout)
             except asyncio.TimeoutError:
                 print("[selftest] WARN audio timeout at %s" % station_id, file=sys.stderr)
-            print("[selftest]   audio chars=%d flow_state=%s" % (received["bytes"], flow.state.value), flush=True)
+            feed = ""
+            if hasattr(audio, "pcm_bytes"):
+                feed = " speaker_chunks=%d speaker_bytes=%d" % (audio.play_calls, audio.pcm_bytes)
+            print("[selftest]   audio chars=%d flow_state=%s%s" % (received["bytes"], flow.state.value, feed), flush=True)
+            pending = getattr(audio, "pending_bytes", None)
+            wait_started = time.time()
+            while pending is not None and float(pending()) > 0 and time.time() - wait_started < 30.0:
+                await asyncio.sleep(0.1)
+            print("[selftest]   playback drained in %.1fs" % (time.time() - wait_started), flush=True)
             await orchestrator.on_speech_finished()
             await orchestrator.on_tool_call("request_next_station", {"reason": "selftest"})
         print("[selftest] summary:", json.dumps({
