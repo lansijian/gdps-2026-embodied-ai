@@ -122,6 +122,7 @@ class G1AudioIO:
         self.play_calls = 0
         self.pcm_bytes = 0
         self._last_fill = 0.0
+        self._stream_id = "guide_%d" % int(time.time() * 1000)
 
     # -- setup -------------------------------------------------------------
     def _find_network(self) -> tuple:
@@ -191,6 +192,10 @@ class G1AudioIO:
         self.play_calls += 1
         self.pcm_bytes += len(pcm_24k)
         with self._play_lock:
+            if not self._play_buf:
+                # One stream id per utterance (the vendor demo does the same with
+                # time_ns); reusing a finished id can be silently dropped.
+                self._stream_id = "guide_%d" % int(time.time() * 1000)
             self._play_buf.extend(pcm_24k)
             self._last_fill = time.monotonic()
 
@@ -238,7 +243,7 @@ class G1AudioIO:
                 continue
             try:
                 if self._audio is not None:
-                    self._audio.PlayStream(self.app_name, "guide", resample_24k_to_16k(chunk))
+                    self._audio.PlayStream(self.app_name, self._stream_id, resample_24k_to_16k(chunk))
             except Exception:
                 pass
             time.sleep(len(chunk) / (24000.0 * 2.0))
