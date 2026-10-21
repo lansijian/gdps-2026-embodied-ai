@@ -219,6 +219,8 @@ def parse_event(raw: str) -> ParsedEvent:
         return ParsedEvent(kind="audio.done", payload=event)
     if event_type == "response.output_audio.started":
         return ParsedEvent(kind="audio.started", payload=event)
+    if event_type == "response.output_audio.delta":
+        return ParsedEvent(kind="audio.delta", payload=event)
     if event_type == "response.canceled":
         return ParsedEvent(kind="canceled", payload=event)
     if event_type == "response.done":

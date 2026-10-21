@@ -248,6 +248,14 @@ class TourFlow:
         ]
 
     # -- P3 route briefs ---------------------------------------------------
+    def on_route_exhibit(self, exhibit_id: str, now: Optional[float] = None) -> Optional[Action]:
+        """Camera matched an exhibit while walking; map it to a route brief."""
+
+        station = self.book.station_for_route_exhibit(exhibit_id)
+        if station is None:
+            return None
+        return self.on_landmark(station.station_id, now=now)
+
     def on_landmark(self, station_id: str, now: Optional[float] = None) -> Optional[Action]:
         """Feed a configured landmark while walking; returns at most one brief."""
 

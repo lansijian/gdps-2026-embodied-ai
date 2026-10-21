@@ -33,6 +33,7 @@ class Station:
     pose: Optional[Pose] = None
     narration_profile: str = "long"  # long | brief
     route_brief: str = ""
+    route_match_exhibit_ids: Tuple[str, ...] = ()  # P3: 相机匹配到这些展品时触发沿途简讲
     target_aliases: Tuple[str, ...] = ()
     reachable: str = "indoor"  # indoor | outdoor | surrounding
     eta_s: int = 60  # walking time from the tour start point
@@ -75,6 +76,14 @@ class StationBook:
     def ordered_stations(self) -> List[Station]:
         ordered = [self._by_id[sid] for sid in self.tour_order if sid in self._by_id]
         return ordered or list(self.stations)
+
+    def station_for_route_exhibit(self, exhibit_id: str) -> Optional[Station]:
+        if not exhibit_id:
+            return None
+        for station in self.stations:
+            if exhibit_id in station.route_match_exhibit_ids:
+                return station
+        return None
 
     def next_after(self, station_id: Optional[str]) -> Optional[Station]:
         ordered = self.ordered_stations()
@@ -159,6 +168,7 @@ class StationBook:
                     pose=parsed_pose,
                     narration_profile=str(entry.get("narration_profile") or "long"),
                     route_brief=str(entry.get("route_brief") or ""),
+                    route_match_exhibit_ids=tuple(str(x) for x in entry.get("route_match_exhibit_ids") or ()),
                     target_aliases=tuple(str(x) for x in entry.get("target_aliases") or ()),
                     reachable=str(entry.get("reachable") or "indoor"),
                     eta_s=int(entry.get("eta_s") or 60),

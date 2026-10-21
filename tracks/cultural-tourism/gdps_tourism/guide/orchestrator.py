@@ -121,7 +121,9 @@ class GuideOrchestrator:
         elif action.kind is ActionKind.LISTEN:
             await self.dialogue.listen()
         elif action.kind is ActionKind.RECOMMEND:
-            await self.dialogue.speak_brief(self.knowledge.recommendations_text())
+            # P5 answers are phrased by the model from the tool result; the dry run
+            # just records the action for the timeline.
+            pass
         elif action.kind is ActionKind.FINISH:
             await self.navigator.stop("tour_finished")
             await self.dialogue.cancel_speech()

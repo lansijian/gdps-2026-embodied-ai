@@ -88,3 +88,26 @@ python3 scripts/tourism/guide_dryrun.py \
 - P1 权威资料（开放时间/票务/设施）、文创馆内容、周边 POI 清单（现有占位数据已在文件里标注 verified=false）；
 - 豆包 API Key 与现场网络；
 - 讲解词长/短两版审核（长讲解取 `knowledge_base.json` 的 `narration`，沿途一句话取 `stations.route_brief`）。
+## 10. 节点运行方式（占位版已可跑 dry-run）
+
+```bash
+# 无 ROS / 无摄像头 / 无云端：跑完整时间线
+python3 scripts/tourism/guide_node.py --dry-run \
+  --stations tracks/cultural-tourism/configs/stations.example.yaml \
+  --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.example.json
+
+# G1 上（ROS 2 Foxy + 导航栈已启动 + DOUBAO_API_KEY 已设置）
+export GDPS_TOURISM_TEMPLATES=$HOME/exhibit_templates
+export DOUBAO_API_KEY=...
+python3 scripts/tourism/guide_node.py \
+  --stations tracks/cultural-tourism/configs/stations.g1.yaml \
+  --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.json \
+  --camera 0 --method orb --prefilter orb --greeting --log-dir logs/tourism
+
+# 现场调试：不等 /tourism/start，直接开跑
+python3 scripts/tourism/guide_node.py ... --autostart
+```
+
+节点内部：rclpy 在后台线程 spin，asyncio 主线程跑「豆包会话 + 导览状态机 + 相机识别」；
+导航用 NavigateToPose Action result 判定到点；P3 每 `--scan-interval` 秒扫一次地标，
+命中 `route_match_exhibit_ids` 的展品则播一句 `route_brief`（同一地标只讲一次，间隔 ≥ brief_gap_s）。
