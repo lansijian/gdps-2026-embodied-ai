@@ -32,7 +32,7 @@ stations:
     area: 博物馆庭院
     pose: {x: 0.0, y: 0.0, yaw: 0.0}      # TODO: 现场建图标定
     narration_profile: long
-    route_brief: "右手边就是原跑马总会大楼的钟楼，1934 年落成，曾是上海西区最高的建筑。"
+    route_brief: "右手边就是钟楼，1934 年落成，曾是上海西区最高的建筑。"
     reachable: outdoor
     eta_s: 20
     target_aliases: [钟楼, 大钟楼, 跑马总会大楼, 跑马厅]
