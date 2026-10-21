@@ -183,3 +183,15 @@ python3 scripts/tourism/check_camera.py --camera 4 --flip 180 \
 ```
 
 注意：厂商 `videohub` 二进制当前是 `.bak`（被禁用，可能是导航组为让出相机）；如需官方图传，需与导航组确认后再恢复。
+### 8.1 2026-10-21 第二轮实测（换 USB 口后）
+
+- 相机换口后稳定：USB 路径 `2-2.2`，6 个接口全部绑定 `uvcvideo`，`/dev/video0-5`；
+- 彩色节点 `/dev/video4`（YUYV），OpenCV 打开为 **1280×720 @ 30fps**；
+- 实时主循环实测（headless，90 帧，`--match-every 2`）：`display≈25.3fps`，`match≈4.8fps`，`mean_match≈170ms`；
+  当前镜头对着地面（低纹理），**所有帧都走全量回退**（`prefilter_fallback=100%`，query_features≈900，good_matches≈4）；
+- 对着展品时粗筛应命中短名单，预计回到 ~90-100ms/帧（bench 实测 93.2ms）；
+- `power/control=on` 但 `autosuspend=2`、`usbfs_memory_mb=16`，仍建议跑一次 `bash scripts/tourism/g1_camera_fix.sh persist`（sudo）彻底稳定；
+- 当前画面朝下/朝地面：需机器人站立并面向展品后再验证识别；`--flip` 方向参数待现场确认。
+
+**低特征快速拒识**：已实现 `fast_reject_features`（默认关闭）。实测地面帧仍有 ~900 个 ORB 特征，
+按特征数阈值无法和展品区分，故暂不启用；空白/墙面帧的全量回退成本可接受（约 170ms，且只发生在没看到展品时）。

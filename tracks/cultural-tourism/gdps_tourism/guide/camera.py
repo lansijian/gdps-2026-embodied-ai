@@ -35,7 +35,7 @@ class CameraConfig:
     min_accept_confidence: float = 0.0
     image_topic: Optional[str] = None  # ROS 图像话题（优先于 /dev/video*，由导航/相机模块发布）
     flip: str = "none"  # G1 头部 RealSense 倒装: none | 180 | hflip | vflip
-    fast_reject_features: int = 200  # 低纹理帧(地面/墙面)快速拒识，G1 上节省约 150ms/帧
+    fast_reject_features: int = 0  # >0 时对极低特征帧快速拒识（默认关闭，现场实测地面帧仍有 ~900 特征，效果有限）
 
 
 class ExhibitCamera:
