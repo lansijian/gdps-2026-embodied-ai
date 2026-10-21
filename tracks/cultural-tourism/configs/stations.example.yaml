@@ -1,0 +1,119 @@
+# Cultural-tourism guide stations (EXAMPLE / 待现场建图后替换)
+#
+# 说明：
+# - pose 坐标系为 map，必须与导航组 g1_nav2_ws 保存的地图一致；现在全是占位 0。
+# - 现场流程：SLAM 建图 -> save_map -> RViz 标点（或 ros2 topic pub /goal_pose 记录）
+#   -> 把每个点的 x/y/yaw 填进来 -> 用 --stations 传给 guide 节点。
+# - tour_order 是完整环线顺序（P2 游客点播时只去目标点，走完回 tour_order 的下一个）。
+# - route_brief 是 P3 沿途简讲：只说名称/一句介绍，避免"到下一个点还在讲上一个"。
+# - target_aliases 供 P2 无坐标指令匹配（"带我去看汇丰铜狮"）。
+
+schema_version: 1
+frame_id: map
+
+tour_order: [S01, S02, S03, S04, S05, S06, S07, S08]
+
+stations:
+  # 沿途地标（不在 tour_order 里，只用于 P3 行进中的一句话简讲）
+  - id: L01
+    name: 钟楼（沿途）
+    kind: landmark
+    area: 庭院
+    narration_profile: brief
+    route_brief: "抬头就是钟楼，1934 年落成，曾是上海西区最高的建筑。"
+    reachable: outdoor
+    eta_s: 0
+    target_aliases: []
+
+  - id: S01
+    name: 庭院与钟楼
+    kind: landmark
+    area: 博物馆庭院
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}      # TODO: 现场建图标定
+    narration_profile: long
+    route_brief: "右手边就是原跑马总会大楼的钟楼，1934 年落成，曾是上海西区最高的建筑。"
+    reachable: outdoor
+    eta_s: 20
+    target_aliases: [钟楼, 大钟楼, 跑马总会大楼, 跑马厅]
+
+  - id: S02
+    name: 豫园仰山堂宴会图
+    kind: exhibit
+    exhibit_ids: [EXH_001]
+    area: 书画专题展区
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "前方展柜是晚清海派纪实画作《豫园仰山堂宴会图》。"
+    reachable: indoor
+    eta_s: 40
+    target_aliases: [豫园宴会图, 仰山堂宴会图, 宴会图]
+
+  - id: S03
+    name: 徐光启全身坐像
+    kind: exhibit
+    exhibit_ids: [EXH_002]
+    area: 古代历史人物展区
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "这边是明代科学家徐光启的全身坐像。"
+    reachable: indoor
+    eta_s: 60
+    target_aliases: [徐光启, 徐光启坐像, 徐文定公]
+
+  - id: S04
+    name: 中国爱迪生电料厂厂照
+    kind: exhibit
+    exhibit_ids: [EXH_003]
+    area: 近代民族工业展区
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "墙上这张是 1930 年代中国爱迪生电料厂的员工合影。"
+    reachable: indoor
+    eta_s: 80
+    target_aliases: [爱迪生电料厂, 厂照, 员工照]
+
+  - id: S05
+    name: 振远将军海防铁炮
+    kind: exhibit
+    exhibit_ids: [EXH_006]
+    area: 海防军事展区
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "庭院那门铁炮是道光年间陈化成督造的“振远将军”海防炮。"
+    reachable: indoor
+    eta_s: 100
+    target_aliases: [铁炮, 海防炮, 振远将军炮, 陈化成]
+
+  - id: S06
+    name: 文创馆
+    kind: shop
+    area: 博物馆文创商店
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: brief
+    route_brief: "前面就是文创馆，馆里的铜狮、钟楼、银饼系列都很受欢迎。"
+    reachable: indoor
+    eta_s: 120
+    target_aliases: [文创馆, 文创店, 文创商店, 纪念品店, 商店]
+
+  - id: S07
+    name: 汇丰银行铜狮“斯蒂芬”
+    kind: exhibit
+    exhibit_ids: [EXH_018]
+    area: 外滩建筑专题区
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "这尊铜狮是原外滩汇丰银行大楼门口的“斯蒂芬”。"
+    reachable: indoor
+    eta_s: 140
+    target_aliases: [汇丰铜狮, 铜狮, 斯蒂芬, 汇丰银行狮子]
+
+  - id: S08
+    name: 屋顶花园与大钟楼
+    kind: landmark
+    area: 五楼屋顶平台
+    pose: {x: 0.0, y: 0.0, yaw: 0.0}
+    narration_profile: long
+    route_brief: "从这里可以看到钟楼和屋顶花园，是拍全景的好位置。"
+    reachable: indoor
+    eta_s: 160
+    target_aliases: [屋顶花园, 空中花园, 观景台]
