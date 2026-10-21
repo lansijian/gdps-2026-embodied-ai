@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .budget import Budget
 from .flow import Action, ActionKind, GuideState, TourFlow
 from .scene import DialogueKnowledge, SceneText, build_route_scene, build_station_scene
 from .stations import Station
@@ -65,6 +66,7 @@ class GuideOrchestrator:
     exhibit_titles: Dict[str, str] = field(default_factory=dict)
     narrations: Dict[str, str] = field(default_factory=dict)
     short_summaries: Dict[str, str] = field(default_factory=dict)
+    budget: Optional[Budget] = None
     started_at: float = field(default_factory=time.time)
 
     # -- scene helpers -----------------------------------------------------
@@ -90,6 +92,8 @@ class GuideOrchestrator:
     async def _execute_one(self, action: Action) -> None:
         payload = action.payload
         if action.kind is ActionKind.NAVIGATE:
+            if self.budget is not None:
+                self.budget.finish_station()
             next_station = self.flow.book.get(str(payload.get("station_id")))
             await self.dialogue.update_scene(self.route_scene(self.flow.book.next_after(self.flow.current_station_id)))
             await self.navigator.go_to(payload)
@@ -97,6 +101,10 @@ class GuideOrchestrator:
             mode = payload.get("mode")
             if mode == "station_arrived":
                 station = self.flow.book.get(str(payload.get("station_id")))
+                if self.budget is not None and station is not None:
+                    self.budget.start_station(station.station_id)
+                    remaining = self._stations_left(station)
+                    self.flow.config.narration_max_s = self.budget.narration_cap_s(remaining)
                 if station is not None and payload.get("needs_observation"):
                     result = await asyncio.wait_for(
                         self.camera.observe(station), timeout=self.config.observe_timeout_s
@@ -147,6 +155,15 @@ class GuideOrchestrator:
         """Vision module (or /tourism/visual_target) recognised an exhibit."""
 
         await self.execute(self.flow.on_visual_target(exhibit_id, confidence, source))
+
+    async def on_budget_check(self) -> None:
+        await self.execute(self.flow.on_budget_check())
+
+    def _stations_left(self, station) -> int:
+        order = list(self.flow.book.tour_order)
+        if station.station_id not in order:
+            return 1
+        return max(1, len(order) - order.index(station.station_id))
 
     async def on_idle_timeout(self) -> None:
         await self.execute(self.flow.on_idle_timeout())

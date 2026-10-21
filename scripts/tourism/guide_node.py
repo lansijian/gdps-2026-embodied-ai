@@ -41,6 +41,7 @@ from gdps_tourism.guide.doubao_realtime import (
     G1AudioIO,
     NullAudioIO,
 )
+from gdps_tourism.guide.budget import Budget
 from gdps_tourism.guide.flow import Action, ActionKind, FlowConfig, GuideState, TourFlow
 from gdps_tourism.guide.knowledge_base import load_knowledge_base
 from gdps_tourism.guide.orchestrator import GuideOrchestrator, OrchestratorConfig
@@ -152,12 +153,19 @@ async def async_main(args: argparse.Namespace) -> int:
     client = None
     sink = None
     try:
+        budget = Budget(
+            total_s=args.total_budget_s,
+            reserve_s=args.budget_reserve_s,
+            max_station_s=args.station_max_s,
+            max_narration_s=args.narration_max_s,
+        )
         flow = TourFlow(
             book,
             FlowConfig(
                 auto_advance=not args.no_auto_advance,
                 listen_idle_end_s=args.listen_idle_end_s,
                 narration_max_s=args.narration_max_s,
+                station_max_s=args.station_max_s,
             ),
         )
         if not args.no_ros:
@@ -206,6 +214,7 @@ async def async_main(args: argparse.Namespace) -> int:
             exhibit_titles=(exhibit_kb.titles if exhibit_kb else {}),
             narrations=(exhibit_kb.narrations if exhibit_kb else {}),
             short_summaries=(exhibit_kb.short_summaries if exhibit_kb else {}),
+            budget=budget,
         )
 
         async def on_event(event) -> None:
@@ -233,6 +242,7 @@ async def async_main(args: argparse.Namespace) -> int:
             if started.is_set():
                 return
             started.set()
+            budget.start()
             await sink_async(orchestrator.execute(flow.start(greeting=bool(payload.get("greeting", args.greeting)))))
 
         async def poll_ros() -> None:
@@ -266,10 +276,27 @@ async def async_main(args: argparse.Namespace) -> int:
                             sink.emit(Action(ActionKind.LOG, {"event": "nav_unhealthy", "payload": event.get("payload")}))
 
         async def idle_loop() -> None:
+            next_report = time.monotonic() + 60.0
             while True:
                 await asyncio.sleep(1.0)
-                if started.is_set():
-                    await orchestrator.on_idle_timeout()
+                if not started.is_set():
+                    continue
+                await orchestrator.on_idle_timeout()
+                await orchestrator.on_budget_check()
+                now = time.monotonic()
+                if now >= next_report:
+                    next_report = now + 60.0
+                    sink.emit(
+                        Action(
+                            ActionKind.LOG,
+                            {
+                                "event": "budget",
+                                "elapsed_s": round(budget.elapsed_s(), 1),
+                                "remaining_s": round(budget.remaining_s(), 1),
+                                "state": flow.state.value,
+                            },
+                        )
+                    )
 
         async def route_scan_loop() -> None:
             while True:
@@ -387,6 +414,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--listen-idle-end-s", type=float, default=30.0)
     parser.add_argument("--narration-max-s", type=float, default=120.0)
     parser.add_argument("--scan-interval", type=float, default=2.0, help="route landmark scan period")
+    parser.add_argument("--total-budget-s", type=float, default=1800.0, help="whole mission budget (default 30 min)")
+    parser.add_argument("--budget-reserve-s", type=float, default=180.0, help="reserve for closing/recovery")
+    parser.add_argument("--station-max-s", type=float, default=180.0, help="hard cap per station")
     parser.add_argument("--log-dir", default="logs/tourism")
     parser.add_argument("--dry-run", action="store_true", help="run the scripted dry-run timeline and exit")
     parser.add_argument("--dry-run-out", default=None)

@@ -49,6 +49,7 @@ class FlowConfig:
     observe_timeout_s: float = 6.0
     narration_min_s: float = 12.0
     narration_max_s: float = 120.0
+    station_max_s: float = 180.0
     listen_idle_end_s: float = 30.0  # 0 disables auto-advance while the visitor is silent
     brief_gap_s: float = 20.0
     auto_advance: bool = True
@@ -62,6 +63,7 @@ class TourFlow:
     current_station_id: Optional[str] = None
     current_exhibit_id: Optional[str] = None
     pending_exhibit_id: Optional[str] = None
+    narration_started_at: Optional[float] = None
     spoken_briefs: Set[str] = field(default_factory=set)
     last_brief_at: float = 0.0
     last_action_at: float = 0.0
@@ -172,6 +174,7 @@ class TourFlow:
             note = "visual_match" if chosen else "no_exhibit"
         self.current_exhibit_id = chosen
         self.state = GuideState.NARRATING
+        self.narration_started_at = self._now()
         self._touch()
         return [
             Action(
@@ -249,9 +252,41 @@ class TourFlow:
     def on_speech_finished(self) -> List[Action]:
         if self.state is GuideState.NARRATING:
             self.state = GuideState.LISTENING
+            self.narration_started_at = None
             self._touch()
             return [Action(ActionKind.LISTEN, {"reason": "narration_done"})]
         return []
+
+    def on_budget_check(self, now: Optional[float] = None) -> List[Action]:
+        """Cut the narration / advance the station when the time budget is spent."""
+
+        if self.state is not GuideState.NARRATING or self.narration_started_at is None:
+            return []
+        moment = self._now() if now is None else now
+        elapsed = moment - self.narration_started_at
+        if elapsed < self.config.narration_max_s:
+            return []
+        station = self.current_station
+        next_station = self.book.next_after(self.current_station_id)
+        self.narration_started_at = None
+        actions = [
+            Action(
+                ActionKind.LOG,
+                {
+                    "event": "narration_budget_timeout",
+                    "station_id": station.station_id if station else None,
+                    "elapsed_s": round(elapsed, 1),
+                    "limit_s": self.config.narration_max_s,
+                },
+            ),
+            Action(ActionKind.CANCEL_SPEECH, {}),
+            self._end_signal(station, next_station, "narration_budget_timeout"),
+        ]
+        if next_station is None:
+            actions += self._finish("budget_finished")
+        else:
+            actions += self._navigate(next_station, "narration_budget_timeout")
+        return actions
 
     # -- visitor intents ---------------------------------------------------
     def on_tool_call(self, name: str, arguments: Dict[str, Any]) -> List[Action]:
