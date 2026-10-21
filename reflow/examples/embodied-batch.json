@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "reporting_profile_version": "S22-v1",
+  "evaluation_id": "00000000-0000-4000-8000-000000000000",
+  "session_id": "session-S22-001",
+  "robot_profile_version": "g1-001-v1",
+  "batch_id": "team-run-001-embodied-batch-001",
+  "stream_id": "team-run-001-joint-stream",
+  "joint_names": [
+    "left_hip_pitch_joint",
+    "left_knee_joint"
+  ],
+  "samples": [
+    {
+      "sample_seq": 0,
+      "timestamp": "2026-10-23T10:00:01+08:00",
+      "mode": "autonomous",
+      "joint_positions": [
+        0.12,
+        -0.45
+      ],
+      "joint_velocities": [
+        0.01,
+        0.02
+      ],
+      "joint_efforts": [
+        1.2,
+        0.8
+      ],
+      "battery_pct": 78.5,
+      "sensors": {
+        "gripper_force_n": 12.5
+      },
+      "checkpoint_id": "S22-P1"
+    },
+    {
+      "sample_seq": 1,
+      "timestamp": "2026-10-23T10:00:02+08:00",
+      "mode": "autonomous",
+      "joint_positions": [
+        0.13,
+        -0.44
+      ],
+      "battery_pct": 78.4,
+      "checkpoint_id": "S22-P1"
+    }
+  ]
+}

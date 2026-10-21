@@ -1,0 +1,154 @@
+# GDPS 2026 S22 文旅导览 · 检查点映射表（v2，基于 2026-10-21 16:25 实测任务包）
+#
+# 事实来源：logs/spec/2026-10-21_S22_task-package-preview_humanoid.json
+#          （GET /reflow/tasks/df983fd4-85b5-4ae3-a99b-a3477427d72e/task-package）
+# 重要：预览会随发布更新；每场必须用“会话冻结任务包”再核对一次（reflow_bootstrap.py package）。
+# 本文件只描述“本地事件 → 平台记录”的转换规则，不含任何伪造数据。
+
+meta:
+  competition: "S22 文旅导览"
+  scene_code: CULTURAL_TOURISM_EDUCATION      # 实测：目录过滤用这个；cultural_services 查不到
+  task_code: task-42c172c6ac7c-1              # 实测任务代码（不是 cultural_tour）
+  benchmark_task_id: df983fd4-85b5-4ae3-a99b-a3477427d72e
+  benchmark_version_id_preview: f6bd586d-a056-4078-9b1a-51fad987b9c0
+  reporting_profile_version: S22-v1
+  morphology: humanoid                        # 宇树 G1；humanoid | quadruped | wheeled | other
+  evaluation_id: ""                           # 每场由评测中心发起后填写
+  session_id: ""                              # 每场建会话后填写
+  control_modes: [autonomous, teleoperation, assisted]
+
+# 任务包事实（预览版）：
+#   检查点 6 个，任务满分 100
+#   任务执行 65：完成时间5(自动/time) + P1 10 + P2 15 + P3 5 + P4 5 + P5 10 + P6 15（人工）
+#   具身数据采集与回流 5（自动/embodied_data）
+#   自主智能 20：理解指令5(人工) + 动线避障15(自动/avoidance)
+#   创新能力 10（人工）
+# 注意：评分项名称与检查点名称编号不一致（评分项“P1 游客日常问答服务”挂 S22-P1 定点讲解），
+#       以 checkpoint_id 字段为准；已列入待确认问题。
+
+checkpoints:
+  - checkpoint_id: S22-P1
+    name: 定点讲解
+    scoring: {item: "P1 游客日常问答服务", max: 10, automatic: false}
+    record_kinds: [attempt, observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      attempt: [speech_started, speech_finished, speech_failed, failed, unknown, aborted]
+      observation: [speech_started, speech_finished, speech_failed, failed, unknown]
+    # 本地事件 → 平台记录
+    events:
+      - {local: exhibit_stable, kind: attempt, status: speech_started}
+      - {local: narration_play_start, kind: attempt, status: speech_started}
+      - {local: narration_play_end, kind: attempt, status: speech_finished}
+      - {local: tts_error, kind: attempt, status: speech_failed}
+      - {local: exhibit_leave, kind: checkpoint_result, status: completed}   # 仍有质量判断，见 details
+    details:
+      # 只写入能真实取证的字段；布尔仅在可核验时置 true，否则留空（平台：缺失=未知）
+      recognition_correct: "展品组命中且讲解词与该展品组一致"
+      misclassified_count: "讲解过程中误识别为其它展品组的稳定事件数"
+      failure_count: "TTS/播报失败次数"
+      start_delay_seconds: "到达点位 → 开始讲解的秒数"
+      autonomous_start: "该检查点开始时 control_modes 当前值 == autonomous"
+      quality_passed: "现场质检/录像复核通过后才置 true"
+      retry_count: "同一点位重新识别次数"
+    evidence: "多视角录像中该点位讲解片段的起止毫秒（赛后上传评测中心）"
+
+  - checkpoint_id: S22-P2
+    name: 问答
+    scoring: {item: "P2 导航引导讲解服务", max: 15, automatic: false}
+    record_kinds: [observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      observation: [answered, unanswered, failed, unknown]
+    events:
+      - {local: qa_answered, kind: observation, status: answered}
+      - {local: qa_timeout, kind: observation, status: unanswered}
+      - {local: qa_error, kind: observation, status: failed}
+    details:
+      # details_schema 为开放对象（additionalProperties=true），以下为自定义但可追溯的指标
+      question: "游客真实问题文本（或转写）"
+      answer_source: "knowledge_base.json / similarity_matcher 命中的展品 ID"
+      hit_score: "检索相似度（若使用 similarity_matcher）"
+      response_latency_s: "提问 → 开始回答秒数"
+      answered: "是否给出可核验回答"
+    evidence: "问答片段录像起止毫秒"
+
+  - checkpoint_id: S22-P3
+    name: 多语言
+    scoring: {item: "P3 沿途讲解服务", max: 5, automatic: false}
+    record_kinds: [attempt, observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      attempt: [language_switched, switch_failed, failed, unknown, aborted]
+      observation: [language_switched, switch_failed, failed, unknown]
+    events:
+      - {local: language_switch_ok, kind: attempt, status: language_switched}
+      - {local: language_switch_fail, kind: attempt, status: switch_failed}
+    details:
+      language: "实际切换到的语种（如 en / ja）"
+      switch_latency_s: "请求 → 切换完成秒数"
+      narration_language_correct: "该语种讲解是否完整播完"
+    evidence: "切换前后录像片段"
+
+  - checkpoint_id: S22-P4
+    name: 跟随避让
+    scoring: {item: "P4 动态路径规划及避障", max: 5, automatic: false}
+    record_kinds: [observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      observation: [tracking_started, tracking_lost, tracking_recovered, tracking_finished, collision, failed, unknown]
+    events:
+      - {local: follow_start, kind: observation, status: tracking_started}
+      - {local: target_lost, kind: observation, status: tracking_lost}
+      - {local: target_recovered, kind: observation, status: tracking_recovered}
+      - {local: collision_event, kind: observation, status: collision}
+      - {local: follow_end, kind: observation, status: tracking_finished}
+    details:
+      collision_count: "真实碰撞次数（0 也必须来自真实传感器/日志，不能默认）"
+      obstacle_handled: "是否绕开动态障碍"
+      max_stop_seconds: "最长连续停顿秒数"
+      entered_restricted_area: "是否进入禁行区"
+      safety_redline: "是否触碰安全红线"
+      critical_takeover: "是否发生关键接管"
+      route_reasonable: "路径是否合理（人工复核）"
+    # 该检查点最依赖轨迹/具身通道：有位姿就传，无位姿不要造
+    channels: [trajectories, embodied]
+
+  - checkpoint_id: S22-P5
+    name: 途中互动
+    scoring: {item: "P5 周边景点与消费推荐", max: 10, automatic: false}
+    record_kinds: [observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      observation: [interaction_started, interaction_finished, no_response, failed, unknown]
+    events:
+      - {local: interaction_begin, kind: observation, status: interaction_started}
+      - {local: interaction_end, kind: observation, status: interaction_finished}
+      - {local: interaction_no_response, kind: observation, status: no_response}
+    details:
+      interaction_type: "招手/提问/驻足等"
+      interaction_count: "有效互动次数"
+      no_response_count: "无响应次数"
+    evidence: "互动片段录像"
+
+  - checkpoint_id: S22-P6
+    name: 销售推荐
+    scoring: {item: "P6 服务交互自然度", max: 15, automatic: false}
+    record_kinds: [observation, checkpoint_result]
+    status_values:
+      checkpoint_result: [completed, partial, failed, skipped, unknown]
+      observation: [recommendation_provided, no_recommendation, failed, unknown]
+    events:
+      - {local: recommendation_given, kind: observation, status: recommendation_provided}
+      - {local: recommendation_missed, kind: observation, status: no_recommendation}
+    details:
+      recommended_items: "推荐内容（景点/文创/餐饮）"
+      accepted_by_visitor: "游客是否接受（人工判定）"
+      recommendation_basis: "推荐依据（位置/展品主题/游客偏好）"
+    evidence: "推荐对话录像片段"
+
+# 自动评分项（无法用检查点覆盖，靠 report/embodied/avoidance 字段与行为本身）
+automatic_scoring_notes:
+  time: "完成时间 5 分：依赖 start_at/end_at 与任务规则；不要漏 end_at"
+  embodied_data: "5 分：依轨迹/具身/影像回流的完整度与质量；轨迹与具身通道必须持续上报直到终态"
+  avoidance: "15 分：动线避障与通行安全，依赖 P4 观测记录 + 轨迹质量 + 录像证据"

@@ -1,0 +1,738 @@
+{
+  "source": "GET /api/v1/reflow/tasks/7d7ea4d7-702e-4c3c-ab84-62da90e75a29/task-package",
+  "fetched_at": "2026-10-21T17:16:00+08:00",
+  "benchmark_task_id": "7d7ea4d7-702e-4c3c-ab84-62da90e75a29",
+  "benchmark_version_id": "0c2fbf9b-e08b-4256-aa8e-027fb09fae24",
+  "scene_id": "33333333-3333-4333-8333-333333333302",
+  "scene_code": "INSPECTION_ANALYSIS",
+  "task_id": "7d7ea4d7-702e-4c3c-ab84-62da90e75a29",
+  "task_code": "task-8ae947c07912-1",
+  "reporting_profile_version": "S05-v1",
+  "control_modes": [
+    "autonomous",
+    "teleoperation",
+    "assisted"
+  ],
+  "frames": [],
+  "channels": {
+    "tasks": {
+      "required": true,
+      "max_records_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "trajectories": {
+      "required": false,
+      "max_points_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "embodied": {
+      "required": false,
+      "max_samples_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "files": {
+      "required": false,
+      "opens_at": null,
+      "closes_at": null
+    }
+  },
+  "robot_profile": null,
+  "checkpoints": [
+    {
+      "checkpoint_id": "S05-P1",
+      "name": "样品接收与取样",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "sample_received",
+          "sample_placed",
+          "sample_missing",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "sample_received",
+          "sample_placed",
+          "sample_missing",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-df49d38035cb-3"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    },
+    {
+      "checkpoint_id": "S05-P2",
+      "name": "样品前处理",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "step_completed",
+          "step_failed",
+          "spill",
+          "broken",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "step_completed",
+          "step_failed",
+          "spill",
+          "broken",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-5f3dc909a1e7-4"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    },
+    {
+      "checkpoint_id": "S05-P3",
+      "name": "排序与离心机装载",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "tube_loaded",
+          "device_started",
+          "load_failed",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "tube_loaded",
+          "device_started",
+          "load_failed",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-ad8aa44b0d68-5"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    },
+    {
+      "checkpoint_id": "S05-P4",
+      "name": "取出与归位",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "returned",
+          "not_returned",
+          "broken",
+          "spill",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "returned",
+          "not_returned",
+          "broken",
+          "spill",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-47841d979939-6"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    },
+    {
+      "checkpoint_id": "S05-P5",
+      "name": "样品状态检查",
+      "record_kinds": [
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "observation": [
+          "normal",
+          "leaking",
+          "broken",
+          "unknown",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-f59ebba62ff9-7"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    },
+    {
+      "checkpoint_id": "S05-P6",
+      "name": "判定分拣与报告",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "sorted",
+          "sort_failed",
+          "report_submitted",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "sorted",
+          "sort_failed",
+          "report_submitted",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [
+        "score-8a11cbd024c6-8"
+      ],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ]
+    }
+  ],
+  "scoring": {
+    "source": "benchmark_center",
+    "task_max_score": "100.00",
+    "rule_version": "competition-rules-v2.0-20261009-r3",
+    "items": [
+      {
+        "id": "9da6661f-e643-4170-a9fa-3ff9667ea0aa",
+        "code": "score-e586c2a06f28-1",
+        "name": "完成时间",
+        "max_score": "10.00",
+        "sort_order": 1,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "time",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "8c48d974-63b3-4700-bb8c-223007806249",
+        "code": "score-a526f4ad4a4a-2",
+        "name": "任务结果",
+        "max_score": "15.00",
+        "sort_order": 2,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "task_result",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "5d98168f-87df-49c8-a77b-0eb3b6fbd209",
+        "code": "score-df49d38035cb-3",
+        "name": "P1 样品接收与取样",
+        "max_score": "5.00",
+        "sort_order": 3,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P1"
+      },
+      {
+        "id": "88606712-acd5-403c-8102-2931f1ce131c",
+        "code": "score-5f3dc909a1e7-4",
+        "name": "P2 样品前处理（奶片称量 + 试管封管）",
+        "max_score": "5.00",
+        "sort_order": 4,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P2"
+      },
+      {
+        "id": "1386de9d-1f21-4833-89a5-749d58455622",
+        "code": "score-ad8aa44b0d68-5",
+        "name": "P3 试管排序与离心机装载",
+        "max_score": "5.00",
+        "sort_order": 5,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P3"
+      },
+      {
+        "id": "5e05a5d1-62ae-4e0a-9ca2-dee36ed5956b",
+        "code": "score-47841d979939-6",
+        "name": "P4 离心后样品取出与归位",
+        "max_score": "5.00",
+        "sort_order": 6,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P4"
+      },
+      {
+        "id": "9285fec8-2dd2-44c4-afc8-862a8fc7df31",
+        "code": "score-f59ebba62ff9-7",
+        "name": "P5 样品状态检查",
+        "max_score": "5.00",
+        "sort_order": 7,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P5"
+      },
+      {
+        "id": "921e348e-36af-4a47-a08d-388da996ff0e",
+        "code": "score-8a11cbd024c6-8",
+        "name": "P6 判定分拣与报告上传",
+        "max_score": "5.00",
+        "sort_order": 8,
+        "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "strategy": "checkpoint",
+        "automatic": true,
+        "checkpoint_id": "S05-P6"
+      },
+      {
+        "id": "64e685db-2f5c-4a57-8cfa-c760452c1f68",
+        "code": "score-1637c1b92407-9",
+        "name": "关节、运行状态、影像等具身数据采集、回流",
+        "max_score": "10.00",
+        "sort_order": 9,
+        "module_id": "5cf474d9-1c93-420f-be83-9af9380b2f59",
+        "strategy": "embodied_data",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "293628d4-edd4-4248-b83d-7f8f54556057",
+        "code": "score-6b3fa16d8e66-10",
+        "name": "理解场景指令并转化为任务目标",
+        "max_score": "10.00",
+        "sort_order": 10,
+        "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+        "strategy": "semantic",
+        "automatic": false,
+        "checkpoint_id": null
+      },
+      {
+        "id": "5904b0f7-6e08-4657-af43-dd73c02190e7",
+        "code": "score-f865f99a2799-11",
+        "name": "全程自主规划与执行",
+        "max_score": "10.00",
+        "sort_order": 11,
+        "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+        "strategy": "autonomy",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "4e11f41b-2377-4a84-b97d-6750136ec2a6",
+        "code": "score-6d7f18482c7d-12",
+        "name": "动线避障与通行安全",
+        "max_score": "10.00",
+        "sort_order": 12,
+        "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+        "strategy": "avoidance",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "0162f31a-12a2-4da8-ace8-49df462ff8b7",
+        "code": "score-673a565932c6-13",
+        "name": "自选创新动作",
+        "max_score": "5.00",
+        "sort_order": 13,
+        "module_id": "02fabdb6-4ea0-4667-8cc8-f5476dc23f09",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": null
+      }
+    ],
+    "modules": [
+      {
+        "id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+        "name": "任务执行",
+        "type_code": "task_execution",
+        "weight": "55.00",
+        "sort_order": 1,
+        "items": [
+          {
+            "id": "9da6661f-e643-4170-a9fa-3ff9667ea0aa",
+            "code": "score-e586c2a06f28-1",
+            "name": "完成时间",
+            "max_score": "10.00",
+            "sort_order": 1,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "time",
+            "automatic": true,
+            "checkpoint_id": null
+          },
+          {
+            "id": "8c48d974-63b3-4700-bb8c-223007806249",
+            "code": "score-a526f4ad4a4a-2",
+            "name": "任务结果",
+            "max_score": "15.00",
+            "sort_order": 2,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "task_result",
+            "automatic": true,
+            "checkpoint_id": null
+          },
+          {
+            "id": "5d98168f-87df-49c8-a77b-0eb3b6fbd209",
+            "code": "score-df49d38035cb-3",
+            "name": "P1 样品接收与取样",
+            "max_score": "5.00",
+            "sort_order": 3,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P1"
+          },
+          {
+            "id": "88606712-acd5-403c-8102-2931f1ce131c",
+            "code": "score-5f3dc909a1e7-4",
+            "name": "P2 样品前处理（奶片称量 + 试管封管）",
+            "max_score": "5.00",
+            "sort_order": 4,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P2"
+          },
+          {
+            "id": "1386de9d-1f21-4833-89a5-749d58455622",
+            "code": "score-ad8aa44b0d68-5",
+            "name": "P3 试管排序与离心机装载",
+            "max_score": "5.00",
+            "sort_order": 5,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P3"
+          },
+          {
+            "id": "5e05a5d1-62ae-4e0a-9ca2-dee36ed5956b",
+            "code": "score-47841d979939-6",
+            "name": "P4 离心后样品取出与归位",
+            "max_score": "5.00",
+            "sort_order": 6,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P4"
+          },
+          {
+            "id": "9285fec8-2dd2-44c4-afc8-862a8fc7df31",
+            "code": "score-f59ebba62ff9-7",
+            "name": "P5 样品状态检查",
+            "max_score": "5.00",
+            "sort_order": 7,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P5"
+          },
+          {
+            "id": "921e348e-36af-4a47-a08d-388da996ff0e",
+            "code": "score-8a11cbd024c6-8",
+            "name": "P6 判定分拣与报告上传",
+            "max_score": "5.00",
+            "sort_order": 8,
+            "module_id": "3472d10f-3bb4-4cf7-9a6f-ea070597d7c4",
+            "strategy": "checkpoint",
+            "automatic": true,
+            "checkpoint_id": "S05-P6"
+          }
+        ]
+      },
+      {
+        "id": "5cf474d9-1c93-420f-be83-9af9380b2f59",
+        "name": "具身数据采集与回流",
+        "type_code": "embodied_data",
+        "weight": "10.00",
+        "sort_order": 2,
+        "items": [
+          {
+            "id": "64e685db-2f5c-4a57-8cfa-c760452c1f68",
+            "code": "score-1637c1b92407-9",
+            "name": "关节、运行状态、影像等具身数据采集、回流",
+            "max_score": "10.00",
+            "sort_order": 9,
+            "module_id": "5cf474d9-1c93-420f-be83-9af9380b2f59",
+            "strategy": "embodied_data",
+            "automatic": true,
+            "checkpoint_id": null
+          }
+        ]
+      },
+      {
+        "id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+        "name": "自主智能",
+        "type_code": "autonomous_intelligence",
+        "weight": "30.00",
+        "sort_order": 3,
+        "items": [
+          {
+            "id": "293628d4-edd4-4248-b83d-7f8f54556057",
+            "code": "score-6b3fa16d8e66-10",
+            "name": "理解场景指令并转化为任务目标",
+            "max_score": "10.00",
+            "sort_order": 10,
+            "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+            "strategy": "semantic",
+            "automatic": false,
+            "checkpoint_id": null
+          },
+          {
+            "id": "5904b0f7-6e08-4657-af43-dd73c02190e7",
+            "code": "score-f865f99a2799-11",
+            "name": "全程自主规划与执行",
+            "max_score": "10.00",
+            "sort_order": 11,
+            "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+            "strategy": "autonomy",
+            "automatic": true,
+            "checkpoint_id": null
+          },
+          {
+            "id": "4e11f41b-2377-4a84-b97d-6750136ec2a6",
+            "code": "score-6d7f18482c7d-12",
+            "name": "动线避障与通行安全",
+            "max_score": "10.00",
+            "sort_order": 12,
+            "module_id": "425ebd9d-e329-4e73-95f5-c76505c3193c",
+            "strategy": "avoidance",
+            "automatic": true,
+            "checkpoint_id": null
+          }
+        ]
+      },
+      {
+        "id": "02fabdb6-4ea0-4667-8cc8-f5476dc23f09",
+        "name": "创新能力",
+        "type_code": "innovation",
+        "weight": "5.00",
+        "sort_order": 4,
+        "items": [
+          {
+            "id": "0162f31a-12a2-4da8-ace8-49df462ff8b7",
+            "code": "score-673a565932c6-13",
+            "name": "自选创新动作",
+            "max_score": "5.00",
+            "sort_order": 13,
+            "module_id": "02fabdb6-4ea0-4667-8cc8-f5476dc23f09",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": null
+          }
+        ]
+      }
+    ],
+    "mode": "automatic_draft",
+    "morphology": "humanoid",
+    "publishes_automatically": false
+  }
+}

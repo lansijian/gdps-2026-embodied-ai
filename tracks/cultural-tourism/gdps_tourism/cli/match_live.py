@@ -9,6 +9,7 @@ import queue
 import sys
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -31,6 +32,14 @@ from .overlay import ChineseTextRenderer, draw_homography_quad, draw_hud
 # copied together with its template directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[4]  # repository root
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]  # tracks/cultural-tourism
+
+# 导览事件统一使用 +08:00 时间戳，与平台回流要求一致（ISO 8601，显式时区）。
+_EVENT_TZ = timezone(timedelta(hours=8))
+
+
+def _iso_now() -> str:
+    return datetime.now(_EVENT_TZ).isoformat(timespec="milliseconds")
+
 
 DEFAULT_MATCHER: Dict[str, Any] = {
     "method": "sift",
@@ -149,6 +158,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--headless", action="store_true", help="no preview window")
     parser.add_argument("--log-jsonl", default=None, help="write one JSON object per match")
     parser.add_argument(
+        "--events-jsonl",
+        default=None,
+        help="写结构化导览事件（默认与 --log-jsonl 同目录：<log>.events.jsonl）；供 reflow/agent.py 转成回流上报记录",
+    )
+    parser.add_argument(
         "--snapshot-dir",
         default=None,
         help="press 's' in the preview to save the raw frame here",
@@ -169,6 +183,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-confidence", type=float, default=None)
     parser.add_argument("--min-margin", type=float, default=None)
     parser.add_argument("--max-frames", type=int, default=0, help="stop after N frames (debug)")
+    parser.add_argument(
+        "--control-mode",
+        default=None,
+        choices=("autonomous", "teleoperation", "assisted"),
+        help="声明本场实际控制模式；会作为 control_mode_changed 事件写入 --events-jsonl（不传则不写入）",
+    )
     parser.add_argument(
         "--tts",
         dest="tts",
@@ -611,6 +631,83 @@ def _run_live(
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_handle = open(str(log_path), "w", encoding="utf-8")
 
+    # 结构化导览事件：供 reflow/agent.py 转成平台回流记录（P1 定点讲解等）。
+    # 与逐帧 jsonl 分开，文件小、可读、可回放。
+    events_handle = None
+    events_seq = 0
+    events_path: Optional[Path] = None
+    if getattr(args, "events_jsonl", None):
+        events_path = Path(args.events_jsonl)
+    elif args.log_jsonl:
+        events_path = Path(args.log_jsonl).with_name(Path(args.log_jsonl).stem + ".events.jsonl")
+    if events_path is not None:
+        events_path.parent.mkdir(parents=True, exist_ok=True)
+        events_handle = open(str(events_path), "w", encoding="utf-8", buffering=1)
+
+    def emit(event_type: str, **fields: Any) -> None:
+        nonlocal events_seq
+        if events_handle is None:
+            return
+        events_seq += 1
+        record: Dict[str, Any] = {
+            "schema_version": "1.0",
+            "seq": events_seq,
+            "ts": _iso_now(),
+            "type": event_type,
+        }
+        record.update(fields)
+        try:
+            events_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as exc:  # pragma: no cover - 事件写入失败不应中断导览
+            print("[events] 写入失败 seq=%d type=%s: %r" % (events_seq, event_type, exc), file=sys.stderr, flush=True)
+
+    # template_id -> (展品组 ID, 展品组中文名)：同一展品的多张模板归组
+    template_groups: Dict[str, Tuple[str, str]] = {}
+    try:
+        for tpl in matcher.library.templates:
+            template_groups[tpl.template_id] = (
+                tpl.exhibit_id or tpl.template_id,
+                tpl.exhibit_name or tpl.display_name,
+            )
+    except Exception:
+        template_groups = {}
+
+    active_exhibit: Optional[Dict[str, Any]] = None
+
+    def close_active(reason: str) -> None:
+        nonlocal active_exhibit
+        if active_exhibit is None:
+            return
+        now = time.perf_counter()
+        emit(
+            "exhibit_left",
+            template_id=active_exhibit["template_id"],
+            exhibit_id=active_exhibit["exhibit_id"],
+            exhibit_name=active_exhibit["exhibit_name"],
+            dwell_s=round(max(0.0, now - active_exhibit["started_perf"]), 2),
+            reason=reason,
+        )
+        if active_exhibit.get("narration_perf") is not None:
+            emit(
+                "narration_end",
+                template_id=active_exhibit["template_id"],
+                exhibit_id=active_exhibit["exhibit_id"],
+                exhibit_name=active_exhibit["exhibit_name"],
+                duration_s=round(max(0.0, now - active_exhibit["narration_perf"]), 2),
+                reason=reason,
+            )
+        active_exhibit = None
+
+    emit(
+        "run_start",
+        source=label,
+        match_every=match_every,
+        template_count=len(template_groups),
+        match_rate=round(match_rate, 3),
+    )
+    if getattr(args, "control_mode", None):
+        emit("control_mode_changed", mode=args.control_mode, source="run_start")
+
     # 尝试加载知识库讲解词
     kb_narrations: Dict[str, Dict[str, str]] = {}
     templates_root = Path(args.templates or ".")
@@ -622,7 +719,6 @@ def _run_live(
     ):
         if kb_path.is_file():
             try:
-                import json
                 kb_content = json.loads(kb_path.read_text(encoding="utf-8"))
                 for item in kb_content.get("exhibits", []) + kb_content.get("composite_boards", []):
                     info = {
@@ -659,6 +755,7 @@ def _run_live(
     ):
         pace_interval = 1.0 / float(source.fps)
 
+    interrupted = False
     try:
         while True:
             frame = source.read()
@@ -703,6 +800,7 @@ def _run_live(
                         log_handle.write(
                             json.dumps(
                                 {
+                                    "ts": _iso_now(),
                                     "frame_id": _item_frame,
                                     "match_ms": round(match_ms, 2),
                                     "stable_id": stable.template_id,
@@ -734,17 +832,56 @@ def _run_live(
                             ),
                             flush=True,
                         )
+                        close_active("switch")
+                        exhibit_id, exhibit_name = template_groups.get(
+                            stable.template_id, (stable.template_id, disp_name)
+                        )
+                        active_exhibit = {
+                            "template_id": stable.template_id,
+                            "exhibit_id": exhibit_id,
+                            "exhibit_name": exhibit_name,
+                            "started_perf": time.perf_counter(),
+                            "narration_perf": None,
+                        }
+                        emit(
+                            "exhibit_stable",
+                            template_id=stable.template_id,
+                            exhibit_id=exhibit_id,
+                            exhibit_name=exhibit_name,
+                            confidence=round(stable.confidence, 4),
+                            inliers=best.inliers if best is not None else None,
+                            frame_id=_item_frame,
+                        )
                         narration_info = kb_narrations.get(stable.template_id) or kb_narrations.get(disp_name)
                         if narration_info:
                             summary = narration_info.get("short_summary", "")
                             if summary:
                                 print(f"📢 [讲解词速览] {summary}", flush=True)
-                            if getattr(args, "tts", False):
+                            tts_enabled = bool(getattr(args, "tts", False))
+                            if tts_enabled:
                                 speech_text = f"识别到展品：{disp_name}。" + (summary[:80] if summary else "")
                                 _speak_async(speech_text)
+                            active_exhibit["narration_perf"] = time.perf_counter()
+                            emit(
+                                "narration_start",
+                                template_id=stable.template_id,
+                                exhibit_id=exhibit_id,
+                                exhibit_name=exhibit_name,
+                                has_summary=bool(summary),
+                                tts=tts_enabled,
+                            )
+                        else:
+                            emit(
+                                "narration_unavailable",
+                                template_id=stable.template_id,
+                                exhibit_id=exhibit_id,
+                                exhibit_name=exhibit_name,
+                            )
                     else:
                         reason = stable.reason or "unknown"
+                        close_active("unknown")
                         print("[UNKNOWN] %s" % reason, flush=True)
+                        emit("exhibit_unknown", reason=reason, frame_id=_item_frame)
 
             elapsed = time.perf_counter() - display_start
             display_fps = frame_id / elapsed if elapsed > 0 else 0.0
@@ -794,10 +931,21 @@ def _run_live(
             if args.max_frames and frame_id >= args.max_frames:
                 break
     except KeyboardInterrupt:
+        interrupted = True
         # Ctrl+C must still reach the [done] summary below (SSH sessions rely on it).
         print("", flush=True)
         print("[interrupt] 收到 Ctrl+C，正在退出并汇总统计…", flush=True)
     finally:
+        close_active("run_end")
+        emit(
+            "run_end",
+            interrupted=interrupted,
+            frames=frame_id,
+            matches=match_count,
+            mean_match_ms=round(match_ms_total / match_count, 2) if match_count else 0.0,
+        )
+        if events_handle is not None:
+            events_handle.close()
         stop_event.set()
         try:
             frame_queue.put_nowait((frame_id, None))

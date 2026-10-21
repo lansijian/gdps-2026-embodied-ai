@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "reporting_profile_version": "S22-v1",
+  "evaluation_id": "00000000-0000-4000-8000-000000000000",
+  "session_id": "session-S22-001",
+  "batch_id": "team-run-001-trajectory-batch-001",
+  "stream_id": "team-run-001-base-stream",
+  "entity_type": "robot_base",
+  "entity_id": "g1-001",
+  "frame_id": "map",
+  "pose_source": "slam",
+  "points": [
+    {
+      "point_seq": 0,
+      "timestamp": "2026-10-23T10:00:01+08:00",
+      "x_m": 1.2,
+      "y_m": 2.5,
+      "z_m": 0,
+      "yaw_rad": 0.82,
+      "checkpoint_id": "S22-P1"
+    },
+    {
+      "point_seq": 1,
+      "timestamp": "2026-10-23T10:00:02+08:00",
+      "x_m": 1.25,
+      "y_m": 2.55,
+      "z_m": 0,
+      "yaw_rad": 0.84,
+      "checkpoint_id": "S22-P1"
+    }
+  ]
+}

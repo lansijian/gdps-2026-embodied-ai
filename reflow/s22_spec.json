@@ -1,0 +1,655 @@
+{
+  "source": "GET /api/v1/reflow/tasks/df983fd4-85b5-4ae3-a99b-a3477427d72e/task-package?morphology=humanoid",
+  "fetched_at": "2026-10-21T16:25:25+08:00",
+  "is_preview": true,
+  "benchmark_task_id": "df983fd4-85b5-4ae3-a99b-a3477427d72e",
+  "benchmark_version_id": "f6bd586d-a056-4078-9b1a-51fad987b9c0",
+  "scene_id": "33333333-3333-4333-8333-333333333309",
+  "scene_code": "CULTURAL_TOURISM_EDUCATION",
+  "task_id": "df983fd4-85b5-4ae3-a99b-a3477427d72e",
+  "task_code": "task-42c172c6ac7c-1",
+  "reporting_profile_version": "S22-v1",
+  "control_modes": [
+    "autonomous",
+    "teleoperation",
+    "assisted"
+  ],
+  "frames": [],
+  "channels": {
+    "tasks": {
+      "required": true,
+      "max_records_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "trajectories": {
+      "required": false,
+      "max_points_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "embodied": {
+      "required": false,
+      "max_samples_per_request": 200,
+      "max_request_bytes": 1048576,
+      "opens_at": null,
+      "closes_at": null
+    },
+    "files": {
+      "required": false,
+      "opens_at": null,
+      "closes_at": null
+    }
+  },
+  "robot_profile": null,
+  "checkpoints": [
+    {
+      "checkpoint_id": "S22-P1",
+      "name": "定点讲解",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "speech_started",
+          "speech_finished",
+          "speech_failed",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "speech_started",
+          "speech_finished",
+          "speech_failed",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    },
+    {
+      "checkpoint_id": "S22-P2",
+      "name": "问答",
+      "record_kinds": [
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "observation": [
+          "answered",
+          "unanswered",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    },
+    {
+      "checkpoint_id": "S22-P3",
+      "name": "多语言",
+      "record_kinds": [
+        "attempt",
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "attempt": [
+          "language_switched",
+          "switch_failed",
+          "failed",
+          "unknown",
+          "aborted"
+        ],
+        "observation": [
+          "language_switched",
+          "switch_failed",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    },
+    {
+      "checkpoint_id": "S22-P4",
+      "name": "跟随避让",
+      "record_kinds": [
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "observation": [
+          "tracking_started",
+          "tracking_lost",
+          "tracking_recovered",
+          "tracking_finished",
+          "collision",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    },
+    {
+      "checkpoint_id": "S22-P5",
+      "name": "途中互动",
+      "record_kinds": [
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "observation": [
+          "interaction_started",
+          "interaction_finished",
+          "no_response",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    },
+    {
+      "checkpoint_id": "S22-P6",
+      "name": "销售推荐",
+      "record_kinds": [
+        "observation",
+        "checkpoint_result"
+      ],
+      "status_values": {
+        "checkpoint_result": [
+          "completed",
+          "partial",
+          "failed",
+          "skipped",
+          "unknown"
+        ],
+        "observation": [
+          "recommendation_provided",
+          "no_recommendation",
+          "failed",
+          "unknown"
+        ]
+      },
+      "required_for_scoring": [],
+      "details_fields": [
+        "adjustment_count",
+        "autonomous_start",
+        "collision_count",
+        "critical_takeover",
+        "critical_task_failed",
+        "drop_count",
+        "entered_restricted_area",
+        "failure_count",
+        "force_limit_exceeded",
+        "max_stop_seconds",
+        "misclassified_count",
+        "normal_removed_count",
+        "obstacle_handled",
+        "quality_passed",
+        "recognition_correct",
+        "removal_failure_count",
+        "retry_count",
+        "route_reasonable",
+        "safety_redline",
+        "start_delay_seconds",
+        "task_interrupted",
+        "valid_inspection_order"
+      ],
+      "objects": []
+    }
+  ],
+  "scoring": {
+    "source": "benchmark_center",
+    "task_max_score": "100.00",
+    "rule_version": "competition-rules-v2.0-20261009-r3",
+    "items": [
+      {
+        "id": "ebf0666f-2695-479e-8ce6-9f8538dcfd49",
+        "code": "score-34a6db34bc5c-1",
+        "name": "完成时间",
+        "max_score": "5.00",
+        "sort_order": 1,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "time",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "22c74a5f-ee31-411a-b555-b0d632cb637b",
+        "code": "score-7e6ee7b7ae84-2",
+        "name": "P1 游客日常问答服务",
+        "max_score": "10.00",
+        "sort_order": 2,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P1"
+      },
+      {
+        "id": "c53bbad1-16a7-4e8f-8cf3-09da2ebf88ee",
+        "code": "score-f20df187e2db-3",
+        "name": "P2 导航引导讲解服务",
+        "max_score": "15.00",
+        "sort_order": 3,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P2"
+      },
+      {
+        "id": "bfa0c327-878f-4ff3-80e7-e1ff309d9df8",
+        "code": "score-c825792987a4-4",
+        "name": "P3 沿途讲解服务",
+        "max_score": "5.00",
+        "sort_order": 4,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P3"
+      },
+      {
+        "id": "e033f96a-adaa-430f-93b6-f443da6177fa",
+        "code": "score-63865c4e961d-5",
+        "name": "P4 动态路径规划及避障",
+        "max_score": "5.00",
+        "sort_order": 5,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P4"
+      },
+      {
+        "id": "435a5525-1fb4-4fbe-8539-116ebb510473",
+        "code": "score-68b7f6723147-6",
+        "name": "P5 周边景点与消费推荐",
+        "max_score": "10.00",
+        "sort_order": 6,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P5"
+      },
+      {
+        "id": "5f458a2d-6e90-4d20-8db7-f711437a58f7",
+        "code": "score-6dd21d8c4f97-7",
+        "name": "P6 服务交互自然度",
+        "max_score": "15.00",
+        "sort_order": 7,
+        "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": "S22-P6"
+      },
+      {
+        "id": "9e50f1de-d2c5-430f-9a14-5f2f8e2e0a71",
+        "code": "score-c5e89027fc56-8",
+        "name": "移动轨迹、运行状态、影像等具身数据采集、回流",
+        "max_score": "5.00",
+        "sort_order": 8,
+        "module_id": "8f1475ef-f4bf-47fa-aefb-cb1becf105b7",
+        "strategy": "embodied_data",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "cd0e4f7a-1e81-42fe-b602-8cd1a9870ffe",
+        "code": "score-8bd26fd09daa-9",
+        "name": "理解场景指令并转化为任务目标",
+        "max_score": "5.00",
+        "sort_order": 9,
+        "module_id": "f9db17b2-bf41-43b2-9aa2-21c8cf8db132",
+        "strategy": "semantic",
+        "automatic": false,
+        "checkpoint_id": null
+      },
+      {
+        "id": "9e32a4cb-e892-4be5-a0fb-ed1b675464fb",
+        "code": "score-809819f8a6e9-10",
+        "name": "动线避障与通行安全",
+        "max_score": "15.00",
+        "sort_order": 10,
+        "module_id": "f9db17b2-bf41-43b2-9aa2-21c8cf8db132",
+        "strategy": "avoidance",
+        "automatic": true,
+        "checkpoint_id": null
+      },
+      {
+        "id": "a334746e-a8ad-4d01-99ae-30e60badcb61",
+        "code": "score-9c53c2047e7c-11",
+        "name": "自选创新动作",
+        "max_score": "10.00",
+        "sort_order": 11,
+        "module_id": "ea5dcedf-c38e-4486-99ae-f14a5fa859bc",
+        "strategy": "manual",
+        "automatic": false,
+        "checkpoint_id": null
+      }
+    ],
+    "modules": [
+      {
+        "id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+        "name": "任务执行",
+        "type_code": "task_execution",
+        "weight": "65.00",
+        "sort_order": 1,
+        "items": [
+          {
+            "id": "ebf0666f-2695-479e-8ce6-9f8538dcfd49",
+            "code": "score-34a6db34bc5c-1",
+            "name": "完成时间",
+            "max_score": "5.00",
+            "sort_order": 1,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "time",
+            "automatic": true,
+            "checkpoint_id": null
+          },
+          {
+            "id": "22c74a5f-ee31-411a-b555-b0d632cb637b",
+            "code": "score-7e6ee7b7ae84-2",
+            "name": "P1 游客日常问答服务",
+            "max_score": "10.00",
+            "sort_order": 2,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P1"
+          },
+          {
+            "id": "c53bbad1-16a7-4e8f-8cf3-09da2ebf88ee",
+            "code": "score-f20df187e2db-3",
+            "name": "P2 导航引导讲解服务",
+            "max_score": "15.00",
+            "sort_order": 3,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P2"
+          },
+          {
+            "id": "bfa0c327-878f-4ff3-80e7-e1ff309d9df8",
+            "code": "score-c825792987a4-4",
+            "name": "P3 沿途讲解服务",
+            "max_score": "5.00",
+            "sort_order": 4,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P3"
+          },
+          {
+            "id": "e033f96a-adaa-430f-93b6-f443da6177fa",
+            "code": "score-63865c4e961d-5",
+            "name": "P4 动态路径规划及避障",
+            "max_score": "5.00",
+            "sort_order": 5,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P4"
+          },
+          {
+            "id": "435a5525-1fb4-4fbe-8539-116ebb510473",
+            "code": "score-68b7f6723147-6",
+            "name": "P5 周边景点与消费推荐",
+            "max_score": "10.00",
+            "sort_order": 6,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P5"
+          },
+          {
+            "id": "5f458a2d-6e90-4d20-8db7-f711437a58f7",
+            "code": "score-6dd21d8c4f97-7",
+            "name": "P6 服务交互自然度",
+            "max_score": "15.00",
+            "sort_order": 7,
+            "module_id": "73ef60ea-2f41-4360-9c4c-f70f89dd4321",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": "S22-P6"
+          }
+        ]
+      },
+      {
+        "id": "8f1475ef-f4bf-47fa-aefb-cb1becf105b7",
+        "name": "具身数据采集与回流",
+        "type_code": "embodied_data",
+        "weight": "5.00",
+        "sort_order": 2,
+        "items": [
+          {
+            "id": "9e50f1de-d2c5-430f-9a14-5f2f8e2e0a71",
+            "code": "score-c5e89027fc56-8",
+            "name": "移动轨迹、运行状态、影像等具身数据采集、回流",
+            "max_score": "5.00",
+            "sort_order": 8,
+            "module_id": "8f1475ef-f4bf-47fa-aefb-cb1becf105b7",
+            "strategy": "embodied_data",
+            "automatic": true,
+            "checkpoint_id": null
+          }
+        ]
+      },
+      {
+        "id": "f9db17b2-bf41-43b2-9aa2-21c8cf8db132",
+        "name": "自主智能",
+        "type_code": "autonomous_intelligence",
+        "weight": "20.00",
+        "sort_order": 3,
+        "items": [
+          {
+            "id": "cd0e4f7a-1e81-42fe-b602-8cd1a9870ffe",
+            "code": "score-8bd26fd09daa-9",
+            "name": "理解场景指令并转化为任务目标",
+            "max_score": "5.00",
+            "sort_order": 9,
+            "module_id": "f9db17b2-bf41-43b2-9aa2-21c8cf8db132",
+            "strategy": "semantic",
+            "automatic": false,
+            "checkpoint_id": null
+          },
+          {
+            "id": "9e32a4cb-e892-4be5-a0fb-ed1b675464fb",
+            "code": "score-809819f8a6e9-10",
+            "name": "动线避障与通行安全",
+            "max_score": "15.00",
+            "sort_order": 10,
+            "module_id": "f9db17b2-bf41-43b2-9aa2-21c8cf8db132",
+            "strategy": "avoidance",
+            "automatic": true,
+            "checkpoint_id": null
+          }
+        ]
+      },
+      {
+        "id": "ea5dcedf-c38e-4486-99ae-f14a5fa859bc",
+        "name": "创新能力",
+        "type_code": "innovation",
+        "weight": "10.00",
+        "sort_order": 4,
+        "items": [
+          {
+            "id": "a334746e-a8ad-4d01-99ae-30e60badcb61",
+            "code": "score-9c53c2047e7c-11",
+            "name": "自选创新动作",
+            "max_score": "10.00",
+            "sort_order": 11,
+            "module_id": "ea5dcedf-c38e-4486-99ae-f14a5fa859bc",
+            "strategy": "manual",
+            "automatic": false,
+            "checkpoint_id": null
+          }
+        ]
+      }
+    ],
+    "mode": "automatic_draft",
+    "morphology": "humanoid",
+    "publishes_automatically": false
+  }
+}

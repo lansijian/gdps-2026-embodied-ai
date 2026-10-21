@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "reporting_profile_version": "S22-v1",
+  "report_id": "team-XXXXXXXX-report-final",
+  "evaluation_id": "00000000-0000-4000-8000-000000000000",
+  "session_id": "session-S22-001",
+  "start_at": "2026-10-23T10:00:00+08:00",
+  "end_at": "2026-10-23T10:18:20+08:00",
+  "task_status": "completed",
+  "avg_speed_mps": 0.6,
+  "completion_note": "P1-P3 完成，P4 无底盘跟随能力按 skipped 上报，P5/P6 以话术完成",
+  "checkpoints": [
+    {
+      "record_id": "team-report-final-P1-attempt-1",
+      "checkpoint_id": "S22-P1",
+      "record_kind": "attempt",
+      "status": "speech_finished",
+      "reported_at": "2026-10-23T10:03:10+08:00",
+      "details": {
+        "recognition_correct": true,
+        "misclassified_count": 0,
+        "failure_count": 0
+      }
+    },
+    {
+      "record_id": "team-report-final-P1-result",
+      "checkpoint_id": "S22-P1",
+      "record_kind": "checkpoint_result",
+      "status": "completed",
+      "reported_at": "2026-10-23T10:03:20+08:00",
+      "details": {
+        "recognition_correct": true,
+        "start_delay_seconds": 1.8,
+        "autonomous_start": true,
+        "quality_passed": true
+      }
+    },
+    {
+      "record_id": "team-report-final-P2-obs-1",
+      "checkpoint_id": "S22-P2",
+      "record_kind": "observation",
+      "status": "answered",
+      "reported_at": "2026-10-23T10:06:00+08:00",
+      "details": {
+        "question": "这幅画讲的是谁？",
+        "answer_source": "EXH_001",
+        "response_latency_s": 2.1
+      }
+    },
+    {
+      "record_id": "team-report-final-P2-result",
+      "checkpoint_id": "S22-P2",
+      "record_kind": "checkpoint_result",
+      "status": "completed",
+      "reported_at": "2026-10-23T10:06:05+08:00",
+      "details": {}
+    },
+    {
+      "record_id": "team-report-final-P3-attempt-1",
+      "checkpoint_id": "S22-P3",
+      "record_kind": "attempt",
+      "status": "language_switched",
+      "reported_at": "2026-10-23T10:09:00+08:00",
+      "details": {
+        "language": "en",
+        "switch_latency_s": 1.2
+      }
+    },
+    {
+      "record_id": "team-report-final-P3-result",
+      "checkpoint_id": "S22-P3",
+      "record_kind": "checkpoint_result",
+      "status": "partial",
+      "reported_at": "2026-10-23T10:10:00+08:00",
+      "details": {
+        "narration_language_correct": false
+      }
+    },
+    {
+      "record_id": "team-report-final-P4-obs-1",
+      "checkpoint_id": "S22-P4",
+      "record_kind": "observation",
+      "status": "tracking_started",
+      "reported_at": "2026-10-23T10:11:00+08:00",
+      "details": {}
+    },
+    {
+      "record_id": "team-report-final-P4-result",
+      "checkpoint_id": "S22-P4",
+      "record_kind": "checkpoint_result",
+      "status": "skipped",
+      "reported_at": "2026-10-23T10:11:30+08:00",
+      "details": {
+        "route_reasonable": false
+      }
+    },
+    {
+      "record_id": "team-report-final-P5-obs-1",
+      "checkpoint_id": "S22-P5",
+      "record_kind": "observation",
+      "status": "interaction_finished",
+      "reported_at": "2026-10-23T10:14:00+08:00",
+      "details": {
+        "interaction_type": "驻足提问",
+        "interaction_count": 1
+      }
+    },
+    {
+      "record_id": "team-report-final-P5-result",
+      "checkpoint_id": "S22-P5",
+      "record_kind": "checkpoint_result",
+      "status": "completed",
+      "reported_at": "2026-10-23T10:14:10+08:00",
+      "details": {}
+    },
+    {
+      "record_id": "team-report-final-P6-obs-1",
+      "checkpoint_id": "S22-P6",
+      "record_kind": "observation",
+      "status": "recommendation_provided",
+      "reported_at": "2026-10-23T10:16:00+08:00",
+      "details": {
+        "recommended_items": [
+          "外滩",
+          "豫园",
+          "文创商店"
+        ],
+        "recommendation_basis": "当前位置与展品主题"
+      }
+    },
+    {
+      "record_id": "team-report-final-P6-result",
+      "checkpoint_id": "S22-P6",
+      "record_kind": "checkpoint_result",
+      "status": "completed",
+      "reported_at": "2026-10-23T10:16:10+08:00",
+      "details": {
+        "accepted_by_visitor": true
+      }
+    }
+  ],
+  "control_records": [
+    {
+      "record_id": "team-report-final-control-001",
+      "changed_at": "2026-10-23T10:00:00+08:00",
+      "mode": "autonomous"
+    },
+    {
+      "record_id": "team-report-final-control-002",
+      "changed_at": "2026-10-23T10:11:00+08:00",
+      "mode": "assisted",
+      "checkpoint_id": "S22-P4"
+    }
+  ]
+}
