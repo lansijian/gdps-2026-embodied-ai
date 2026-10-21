@@ -28,6 +28,13 @@ python3 scripts/tourism/check_camera.py --camera 4 --flip 180 \
 预期：`[camera] captured ... shape=(480, 640, 3)`，识别结果 `accepted` 或 `unknown_reason` 合理。
 若内核日志是 `error -71 / device not responding`：拔插 Type-C 后重跑修复脚本。
 
+**2026-10-21 实测**：RealSense 在 SuperSpeed 下反复报 `device not accepting address / error -71 / Disable of U1/U2 failed`，
+表现为 `/dev/video*` 每隔一两分钟消失重连。处理顺序：
+1) 重新插紧/更换机器人内部 Type-C 线（优先）；2) `bash scripts/tourism/g1_camera_fix.sh persist` 后重启；
+3) 仍不稳定时用 USB2 转接（640×480 彩色流 YUYV 约 18MB/s，USB2 可承受），避免 SuperSpeed 信号问题。
+彩色节点通常是 `/dev/video4`（YUYV），红外/深度是 `/dev/video0-3`（Z16/GREY）；头部安装方向由 `--flip` 校正，
+站定后 `check_camera.py --camera 4` 抓一帧确认画面方向（当前抓到的红外帧是天花板、彩色帧是地面，需现场确认相机朝向）。
+
 ```bash
 # A. ROS 图像话题（等队友给话题名后替换）
 ros2 topic list | grep -i image
