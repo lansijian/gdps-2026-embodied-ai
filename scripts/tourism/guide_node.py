@@ -44,7 +44,12 @@ from gdps_tourism.guide.doubao_realtime import (
 from gdps_tourism.guide.budget import Budget
 from gdps_tourism.guide.flow import Action, ActionKind, FlowConfig, GuideState, TourFlow
 from gdps_tourism.guide.knowledge_base import load_knowledge_base
-from gdps_tourism.guide.offline_audio import FallbackDialogue, OfflineAudioDialogue
+from gdps_tourism.guide.offline_audio import (
+    FallbackDialogue,
+    G1WavPlayer,
+    OfflineAudioDialogue,
+    SubprocessPlayer,
+)
 from gdps_tourism.guide.orchestrator import GuideOrchestrator, OrchestratorConfig
 from gdps_tourism.guide.scene import DialogueKnowledge, build_greeting_scene
 from gdps_tourism.guide.stations import StationBook
@@ -225,7 +230,17 @@ async def async_main(args: argparse.Namespace) -> int:
         offline = None
         dialogue_port = DoubaoDialogueAdapter(client)
         if args.offline_audio_dir:
-            offline = OfflineAudioDialogue.from_dir(args.offline_audio_dir)
+            player = None
+            if args.offline_player in ("auto", "g1"):
+                try:
+                    player = G1WavPlayer(volume=args.volume)
+                except Exception as exc:
+                    if args.offline_player == "g1":
+                        raise
+                    print("[guide][warn] G1 喇叭播放不可用，回退 aplay: %s" % exc, file=sys.stderr, flush=True)
+            if player is None:
+                player = SubprocessPlayer()
+            offline = OfflineAudioDialogue.from_dir(args.offline_audio_dir, player=player)
             offline.on_missing = lambda text: sink.emit(
                 Action(ActionKind.LOG, {"event": "offline_audio_missing", "text": text[:40]})
             )
@@ -458,6 +473,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--null-audio", action="store_true", help="no G1 speaker/mic (laptop tests)")
     parser.add_argument("--offline-audio-dir", default=None, help="pre-generated fallback wav directory")
     parser.add_argument("--offline", action="store_true", help="never connect to Doubao; use local wav only")
+    parser.add_argument(
+        "--offline-player",
+        choices=("auto", "subprocess", "g1"),
+        default="auto",
+        help="local wav output: g1 = Unitree voice service (robot speaker), subprocess = aplay/paplay",
+    )
     parser.add_argument("--no-ros", action="store_true", help="no ROS bridge (debug without rclpy)")
     parser.add_argument("--autostart", action="store_true")
     parser.add_argument("--greeting", action="store_true", help="open with the P1 intake greeting")

@@ -86,6 +86,66 @@ class SubprocessPlayer:
             self._process = None
 
 
+class G1WavPlayer:
+    """Play fallback wav files through the G1 voice service (free, no cloud).
+
+    The robot speaker is routed through Unitree's voice service, not ALSA, so
+    SubprocessPlayer (aplay/paplay) cannot reach it.  This player decodes the wav
+    to 24 kHz mono int16 and feeds G1AudioIO, which calls AudioClient.PlayStream.
+    """
+
+    def __init__(self, volume: int = 80) -> None:
+        self.volume = int(volume)
+        self._io = None
+
+    def _ensure(self):
+        if self._io is None:
+            from .doubao_realtime import G1AudioIO
+
+            io = G1AudioIO(volume=self.volume)
+            io.start()
+            self._io = io
+        return self._io
+
+    @staticmethod
+    def _load_pcm24(path: Path) -> bytes:
+        import wave
+
+        import numpy as np
+
+        with wave.open(str(path), "rb") as handle:
+            channels = handle.getnchannels()
+            width = handle.getsampwidth()
+            rate = handle.getframerate()
+            raw = handle.readframes(handle.getnframes())
+        if width != 2:
+            return b""
+        samples = np.frombuffer(raw, dtype=np.int16)
+        if channels > 1:
+            samples = samples.reshape(-1, channels).mean(axis=1).astype(np.int16)
+        if rate != 24000 and len(samples) > 1:
+            count = max(1, int(round(len(samples) * 24000.0 / rate)))
+            index = np.linspace(0, len(samples) - 1, count)
+            samples = np.interp(index, np.arange(len(samples)), samples.astype(np.float32)).astype(np.int16)
+        return samples.tobytes()
+
+    def play(self, path: Path) -> Any:
+        io = self._ensure()
+        pcm = self._load_pcm24(Path(path))
+        if pcm:
+            io.play(pcm)
+        return None
+
+    def stop(self) -> None:
+        if self._io is not None:
+            self._io.stop_playback()
+
+    def close(self) -> None:
+        if self._io is not None:
+            self._io.stop()
+            self._io = None
+
+
 @dataclass
 class OfflineAudioDialogue:
     """DialoguePort implementation backed by pre-generated wav files."""
@@ -199,6 +259,7 @@ __all__ = [
     "load_manifest",
     "wav_duration_s",
     "SubprocessPlayer",
+    "G1WavPlayer",
     "OfflineAudioDialogue",
     "FallbackDialogue",
 ]

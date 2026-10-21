@@ -39,9 +39,33 @@ from gdps_tourism.guide.doubao_realtime import (  # noqa: E402
 from gdps_tourism.guide.dryrun import MockDialogue, MockNavigator  # noqa: E402
 from gdps_tourism.guide.flow import Action, ActionKind, FlowConfig, GuideState, TourFlow  # noqa: E402
 from gdps_tourism.guide.knowledge_base import load_knowledge_base  # noqa: E402
+from gdps_tourism.guide.offline_audio import (  # noqa: E402
+    G1WavPlayer,
+    OfflineAudioDialogue,
+    SubprocessPlayer,
+)
 from gdps_tourism.guide.orchestrator import GuideOrchestrator  # noqa: E402
 from gdps_tourism.guide.scene import DialogueKnowledge, build_greeting_scene  # noqa: E402
 from gdps_tourism.guide.stations import StationBook  # noqa: E402
+
+
+class NullDialogue:
+    """Offline dialogue port: no network, no cost (flow / camera / END only)."""
+
+    async def update_scene(self, scene) -> None:
+        return None
+
+    async def narrate(self, text: str) -> None:
+        return None
+
+    async def cancel_speech(self) -> None:
+        return None
+
+    async def listen(self) -> None:
+        return None
+
+    async def speak_brief(self, text: str) -> None:
+        return None
 
 
 class DialogueAdapter:
@@ -75,9 +99,6 @@ class RecordingSink:
 
 
 async def run(args) -> int:
-    if not args.no_play and not os.environ.get("DOUBAO_API_KEY", "").strip():
-        print("请设置 DOUBAO_API_KEY（或加 --no-play）", file=sys.stderr)
-        return 2
     book = StationBook.load(Path(args.stations_config))
     knowledge = DialogueKnowledge.load(Path(args.knowledge) if args.knowledge else None)
     kb = load_knowledge_base(Path(args.templates))
@@ -106,18 +127,33 @@ async def run(args) -> int:
         if event.kind == "audio.done":
             done.set()
 
-    audio = NullAudioIO() if not args.play else G1AudioIO(volume=args.volume)
-    client = DoubaoRealtimeClient(
-        DoubaoConfig(voice=args.voice),
-        audio,
-        on_event=on_event,
-        on_error=lambda message: print("[selftest][doubao-error]", message, file=sys.stderr),
-    )
+    client = None
+    audio = NullAudioIO()
+    if args.doubao:
+        if not os.environ.get("DOUBAO_API_KEY", "").strip():
+            print("--doubao 需要 DOUBAO_API_KEY（会产生 API 费用）", file=sys.stderr)
+            return 2
+        audio = NullAudioIO() if not args.play else G1AudioIO(volume=args.volume)
+        client = DoubaoRealtimeClient(
+            DoubaoConfig(voice=args.voice),
+            audio,
+            on_event=on_event,
+            on_error=lambda message: print("[selftest][doubao-error]", message, file=sys.stderr),
+        )
+        dialogue_port = DialogueAdapter(client)
+        mode = "doubao"
+    elif args.offline_audio_dir:
+        player = G1WavPlayer(volume=args.volume) if args.play else SubprocessPlayer()
+        dialogue_port = OfflineAudioDialogue.from_dir(Path(args.offline_audio_dir), player=player)
+        mode = "offline-audio"
+    else:
+        dialogue_port = NullDialogue()
+        mode = "offline-null"
     flow = TourFlow(book, FlowConfig(auto_advance=True))
     sink = RecordingSink()
     orchestrator = GuideOrchestrator(
         flow=flow,
-        dialogue=DialogueAdapter(client),
+        dialogue=dialogue_port,
         navigator=MockNavigator(),
         camera=camera,
         sink=sink,
@@ -129,8 +165,11 @@ async def run(args) -> int:
 
     started = time.time()
     try:
-        await client.connect(build_greeting_scene(knowledge=knowledge))
-        print("[selftest] doubao session %.1fs" % (time.time() - started), flush=True)
+        if client is not None:
+            await client.connect(build_greeting_scene(knowledge=knowledge))
+            print("[selftest] doubao session %.1fs" % (time.time() - started), flush=True)
+        else:
+            print("[selftest] mode=%s (no Doubao API call, no cost)" % mode, flush=True)
         await orchestrator.execute(flow.start())
         for index in range(args.stations):
             station_id = flow.current_station_id
@@ -140,21 +179,25 @@ async def run(args) -> int:
             observe_started = time.time()
             await orchestrator.on_navigation_arrived(station_id)
             observe_ms = (time.time() - observe_started) * 1000.0
+            print("[selftest]   recognized_exhibit=%s" % getattr(flow, "current_exhibit_id", None), flush=True)
             print("[selftest] station %s (%s) camera+scene %.0fms" % (station_id, station.name, observe_ms), flush=True)
-            done.clear()
-            try:
-                await asyncio.wait_for(done.wait(), timeout=args.timeout)
-            except asyncio.TimeoutError:
-                print("[selftest] WARN audio timeout at %s" % station_id, file=sys.stderr)
-            feed = ""
-            if hasattr(audio, "pcm_bytes"):
-                feed = " speaker_chunks=%d speaker_bytes=%d" % (audio.play_calls, audio.pcm_bytes)
-            print("[selftest]   audio chars=%d flow_state=%s%s" % (received["bytes"], flow.state.value, feed), flush=True)
-            pending = getattr(audio, "pending_bytes", None)
-            wait_started = time.time()
-            while pending is not None and float(pending()) > 0 and time.time() - wait_started < 30.0:
-                await asyncio.sleep(0.1)
-            print("[selftest]   playback drained in %.1fs" % (time.time() - wait_started), flush=True)
+            if client is not None:
+                done.clear()
+                try:
+                    await asyncio.wait_for(done.wait(), timeout=args.timeout)
+                except asyncio.TimeoutError:
+                    print("[selftest] WARN audio timeout at %s" % station_id, file=sys.stderr)
+                feed = ""
+                if hasattr(audio, "pcm_bytes"):
+                    feed = " speaker_chunks=%d speaker_bytes=%d" % (audio.play_calls, audio.pcm_bytes)
+                print("[selftest]   audio chars=%d flow_state=%s%s" % (received["bytes"], flow.state.value, feed), flush=True)
+                pending = getattr(audio, "pending_bytes", None)
+                wait_started = time.time()
+                while pending is not None and float(pending()) > 0 and time.time() - wait_started < 30.0:
+                    await asyncio.sleep(0.1)
+                print("[selftest]   playback drained in %.1fs" % (time.time() - wait_started), flush=True)
+            else:
+                await asyncio.sleep(0.2)
             await orchestrator.on_speech_finished()
             await orchestrator.on_tool_call("request_next_station", {"reason": "selftest"})
         print("[selftest] summary:", json.dumps({
@@ -162,11 +205,18 @@ async def run(args) -> int:
             "end_signals": sum(1 for a in sink.actions if a.kind is ActionKind.END_SIGNAL),
             "navigations": sum(1 for a in sink.actions if a.kind is ActionKind.NAVIGATE),
             "audio_events": events.count("audio.done"),
+            "mode": mode,
             "final_state": flow.state.value,
         }, ensure_ascii=False))
         return 0
     finally:
-        await client.close()
+        if client is not None:
+            await client.close()
+        else:
+            try:
+                await dialogue_port.cancel_speech()
+            except Exception:
+                pass
         camera.close()
 
 
@@ -181,8 +231,9 @@ def main(argv=None) -> int:
     parser.add_argument("--method", default="orb")
     parser.add_argument("--truncate", type=int, default=120)
     parser.add_argument("--timeout", type=float, default=25.0)
+    parser.add_argument("--doubao", action="store_true", help="use the paid Doubao API (default: offline, no cost)")
+    parser.add_argument("--offline-audio-dir", default=None, help="pre-generated fallback wav directory")
     parser.add_argument("--play", action="store_true", help="play through the G1 speaker")
-    parser.add_argument("--no-play", action="store_true", help="skip Doubao entirely (should not be used)")
     parser.add_argument("--volume", type=int, default=60)
     parser.add_argument("--voice", default=None)
     args = parser.parse_args(argv)
