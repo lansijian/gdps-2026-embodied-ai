@@ -77,13 +77,13 @@ class NullAudioIO:
         self._mic.put(pcm)
 
     def play(self, pcm_24k: bytes) -> None:
-        if not self.muted:
-            self.played.append(pcm_24k)
+        self.played.append(pcm_24k)
 
     def stop_playback(self) -> None:
         pass
 
     def set_muted(self, muted: bool) -> None:
+        # mute is for the microphone uplink only; speaker playback must continue
         self.muted = bool(muted)
 
 
@@ -179,7 +179,8 @@ class G1AudioIO:
 
     # -- speaker -----------------------------------------------------------
     def play(self, pcm_24k: bytes) -> None:
-        if self._audio is None or self._muted:
+        # mic mute must not silence the speaker
+        if self._audio is None:
             return
         with self._play_lock:
             self._play_buf.extend(pcm_24k)
@@ -278,7 +279,7 @@ class DoubaoConfig:
     ws_url: str = WS_URL
     api_key_env: str = "DOUBAO_API_KEY"
     model: str = protocol.MODEL
-    voice: str = protocol.DEFAULT_VOICE
+    voice: Optional[str] = None  # None -> DEFAULT_VOICE（避免上游传 voice=None 覆盖默认音色）
     input_rate: int = 16000
     output_rate: int = 24000
     connect_timeout_s: float = 15.0
@@ -322,15 +323,16 @@ class DoubaoRealtimeClient:
             self._transport = WebSocketTransport(self.config.ws_url, api_key)
         await self._transport.connect()
         self.audio.start()
+        voice = self.config.voice or protocol.DEFAULT_VOICE
         if scene is not None:
             create = protocol.session_create(
                 scene.instructions,
-                voice=self.config.voice,
+                voice=voice,
                 tools=scene.tools,
                 hotwords=self.config.hotwords or None,
             )
         else:
-            create = protocol.session_create("", voice=self.config.voice)
+            create = protocol.session_create("", voice=voice)
         await self._transport.send(create)
         # The receiver must run before we wait for the acknowledgement.
         self._tasks = [asyncio.ensure_future(self._receive_loop())]

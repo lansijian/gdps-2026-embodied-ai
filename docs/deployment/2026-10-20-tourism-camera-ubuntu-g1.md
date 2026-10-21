@@ -195,3 +195,15 @@ python3 scripts/tourism/check_camera.py --camera 4 --flip 180 \
 
 **低特征快速拒识**：已实现 `fast_reject_features`（默认关闭）。实测地面帧仍有 ~900 个 ORB 特征，
 按特征数阈值无法和展品区分，故暂不启用；空白/墙面帧的全量回退成本可接受（约 170ms，且只发生在没看到展品时）。
+### 8.2 真机全链路自检（2026-10-21，未动机器人）
+
+```bash
+export DOUBAO_API_KEY="$(cat ~/.doubao_key)"
+cd ~/tourism_guide
+python3 scripts/tourism/guide_selftest.py --stations 2 --truncate 100 \
+  --camera 4 --flip 180 --play --volume 60
+```
+
+实测结果：豆包会话 1.5s；S01 音频 485KB、S02 音频 1.74MB（均经 G1 喇叭播放）；
+2 个 END_NARRATION、3 次导航请求、2 次 audio.done，状态机按预期推进。
+该自检用 MockNavigator 跳过真实导航，只验证「相机→匹配→场景→豆包→意图→END」链路。
