@@ -33,6 +33,7 @@ class CameraConfig:
     height: int = 720
     video_path: Optional[str] = None
     min_accept_confidence: float = 0.0
+    image_topic: Optional[str] = None  # ROS 图像话题（优先于 /dev/video*，由导航/相机模块发布）
 
 
 class ExhibitCamera:
@@ -49,7 +50,7 @@ class ExhibitCamera:
         self.last_template: Optional[str] = None
 
     # -- lifecycle ---------------------------------------------------------
-    def start(self, station_exhibit_map: Optional[Dict[str, List[str]]] = None) -> None:
+    def start(self, station_exhibit_map: Optional[Dict[str, List[str]]] = None, ros=None) -> None:
         root = self.config.templates_dir
         if not root or not Path(root).is_dir():
             raise ValueError("templates dir is required (--templates or GDPS_TOURISM_TEMPLATES)")
@@ -69,7 +70,17 @@ class ExhibitCamera:
         for station_id, exhibit_ids in (station_exhibit_map or {}).items():
             for exhibit_id in exhibit_ids:
                 self._template_station[exhibit_id] = station_id
-        if self.config.video_path:
+        self._open_source(ros)
+
+    def _open_source(self, ros=None) -> None:
+        """Pick the frame source: ROS image topic > video file > camera device."""
+
+        if self.config.image_topic:
+            if ros is None:
+                raise RuntimeError("--image-topic 需要 ROS 模式（不要同时用 --no-ros）")
+            self._source = ros.make_image_source(self.config.image_topic)
+            self._source.start()
+        elif self.config.video_path:
             self._source = VideoFileSource(self.config.video_path)
         else:
             self._source = open_camera_source(
@@ -103,6 +114,19 @@ class ExhibitCamera:
             return None, float(best.confidence), best.template_id
         exhibit_id = self._template_exhibit.get(best.template_id, best.template_id)
         return exhibit_id, float(best.confidence), best.template_id
+
+    async def scan_exhibit(self) -> Tuple[Optional[str], float]:
+        """Unfiltered exhibit match (vision-triggered navigation)."""
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._scan_exhibit_sync)
+
+    def _scan_exhibit_sync(self) -> Tuple[Optional[str], float]:
+        frame = self._grab()
+        if frame is None:
+            return None, 0.0
+        exhibit_id, confidence, _template_id = self._match_frame(frame)
+        return exhibit_id, confidence
 
     async def observe(self, station: Station) -> Tuple[Optional[str], float]:
         """One synchronous capture+match hop, executed off the asyncio loop."""

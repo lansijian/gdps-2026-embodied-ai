@@ -61,6 +61,7 @@ class TourFlow:
     state: GuideState = GuideState.IDLE
     current_station_id: Optional[str] = None
     current_exhibit_id: Optional[str] = None
+    pending_exhibit_id: Optional[str] = None
     spoken_briefs: Set[str] = field(default_factory=set)
     last_brief_at: float = 0.0
     last_action_at: float = 0.0
@@ -162,12 +163,13 @@ class TourFlow:
         station = self.current_station
         if station is None:
             return [Action(ActionKind.LOG, {"event": "observation_without_station"})]
-        chosen = exhibit_id
+        chosen = exhibit_id or self.pending_exhibit_id
+        self.pending_exhibit_id = None
         if chosen is None and station.exhibit_ids:
             chosen = station.exhibit_ids[0]
             note = "fallback_station_exhibit"
         else:
-            note = "visual_match" if exhibit_id else "no_exhibit"
+            note = "visual_match" if chosen else "no_exhibit"
         self.current_exhibit_id = chosen
         self.state = GuideState.NARRATING
         self._touch()
@@ -191,6 +193,58 @@ class TourFlow:
                 },
             ),
         ]
+
+    def on_visual_target(self, exhibit_id: str, confidence: float = 0.0, source: str = "vision") -> List[Action]:
+        """A recognised exhibit (vision module or visitor request) triggers navigation.
+
+        Behaviour:
+          - already at the station and listening  -> narrate right away
+          - already at the station and narrating  -> ignore (no duplicate)
+          - elsewhere                             -> end current narration, navigate
+        The matched exhibit is remembered so the arrival narration uses it.
+        """
+
+        station = self.book.station_for_exhibit(exhibit_id)
+        if station is None:
+            return [
+                Action(
+                    ActionKind.LOG,
+                    {"event": "visual_target_unmapped", "exhibit_id": exhibit_id, "confidence": confidence},
+                ),
+            ]
+        self.pending_exhibit_id = exhibit_id
+        log = Action(
+            ActionKind.LOG,
+            {
+                "event": "visual_target",
+                "exhibit_id": exhibit_id,
+                "station_id": station.station_id,
+                "confidence": round(float(confidence), 3),
+                "source": source,
+                "state": self.state.value,
+            },
+        )
+        already_here = self.current_station_id == station.station_id and self.state in (
+            GuideState.ARRIVED,
+            GuideState.NARRATING,
+            GuideState.LISTENING,
+        )
+        if already_here:
+            if self.state is GuideState.LISTENING:
+                return [log] + self.on_observation(exhibit_id, confidence)
+            return [log]
+
+        actions = [log]
+        if self.state in (
+            GuideState.GREETING,
+            GuideState.ARRIVED,
+            GuideState.NARRATING,
+            GuideState.LISTENING,
+        ):
+            actions.append(self._end_signal(self.current_station, station, "visual_target"))
+            actions.append(Action(ActionKind.CANCEL_SPEECH, {}))
+        actions += self._navigate(station, "visual_target")
+        return actions
 
     def on_speech_finished(self) -> List[Action]:
         if self.state is GuideState.NARRATING:

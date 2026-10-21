@@ -163,7 +163,12 @@ async def async_main(args: argparse.Namespace) -> int:
         if not args.no_ros:
             from gdps_tourism.guide.ros2_adapters import RosBridge, RosConfig
 
-            ros = RosBridge(RosConfig())
+            ros = RosBridge(
+                RosConfig(
+                    action_name=args.action_name,
+                    visual_target_topic=args.visual_target_topic,
+                )
+            )
             ros.start()
         log_path = Path(args.log_dir) / ("guide_%s.jsonl" % datetime.now().strftime("%Y%m%d_%H%M%S"))
         sink = GuideLogSink(ros, log_path)
@@ -176,9 +181,13 @@ async def async_main(args: argparse.Namespace) -> int:
                 backend=args.backend,
                 video_path=args.video,
                 min_accept_confidence=args.min_confidence,
+                image_topic=args.image_topic,
             )
         )
-        camera.start({station.station_id: list(station.exhibit_ids) for station in book.stations})
+        camera.start(
+            {station.station_id: list(station.exhibit_ids) for station in book.stations},
+            ros=ros,
+        )
         audio = NullAudioIO() if args.null_audio else G1AudioIO(volume=args.volume)
         client = DoubaoRealtimeClient(
             DoubaoConfig(voice=args.voice, hotwords=(exhibit_kb.hotwords[:80] if exhibit_kb else [])),
@@ -236,6 +245,15 @@ async def async_main(args: argparse.Namespace) -> int:
                         await start_tour(event.get("payload") or {})
                     elif event["type"] == "nav_arrived":
                         await orchestrator.on_navigation_arrived(str(event.get("station_id")))
+                    elif event["type"] == "visual_target":
+                        payload = event.get("payload") or {}
+                        exhibit_id = str(payload.get("exhibit_id") or "")
+                        if exhibit_id:
+                            await orchestrator.on_visual_target(
+                                exhibit_id,
+                                float(payload.get("confidence") or 0.0),
+                                str(payload.get("source") or "external"),
+                            )
                     elif event["type"] == "nav_failed":
                         sink.emit(
                             Action(
@@ -262,7 +280,45 @@ async def async_main(args: argparse.Namespace) -> int:
                 if station_id:
                     await orchestrator.on_landmark(station_id)
 
-        tasks = [asyncio.ensure_future(poll_ros()), asyncio.ensure_future(idle_loop()), asyncio.ensure_future(route_scan_loop())]
+        async def vision_nav_loop() -> None:
+            """Vision-triggered navigation: see exhibit -> walk to its station -> narrate."""
+
+            last_trigger_at = 0.0
+            while True:
+                await asyncio.sleep(max(0.3, args.vision_nav_interval))
+                if not args.vision_nav or not started.is_set():
+                    continue
+                if flow.state not in (GuideState.GREETING, GuideState.LISTENING):
+                    continue
+                now = time.monotonic()
+                if now - last_trigger_at < args.vision_nav_cooldown:
+                    continue
+                exhibit_id, confidence = await camera.scan_exhibit()
+                if not exhibit_id or confidence < args.vision_min_confidence:
+                    continue
+                station = book.station_for_exhibit(exhibit_id)
+                if station is None or station.station_id == flow.current_station_id:
+                    continue
+                last_trigger_at = now
+                sink.emit(
+                    Action(
+                        ActionKind.LOG,
+                        {
+                            "event": "vision_nav_trigger",
+                            "exhibit_id": exhibit_id,
+                            "station_id": station.station_id,
+                            "confidence": round(float(confidence), 3),
+                        },
+                    )
+                )
+                await orchestrator.on_visual_target(exhibit_id, confidence, "vision_loop")
+
+        tasks = [
+            asyncio.ensure_future(poll_ros()),
+            asyncio.ensure_future(idle_loop()),
+            asyncio.ensure_future(route_scan_loop()),
+            asyncio.ensure_future(vision_nav_loop()),
+        ]
         if args.autostart:
             await start_tour({"greeting": args.greeting})
         else:
@@ -311,6 +367,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--camera", default="0")
     parser.add_argument("--backend", default=None)
     parser.add_argument("--video", default=None, help="replay video instead of a camera (dry dev)")
+    parser.add_argument("--image-topic", default=None, help="ROS sensor_msgs/Image topic (instead of /dev/video*)")
+    parser.add_argument("--action-name", default="/navigate_to_pose", help="Nav2 NavigateToPose action")
+    parser.add_argument("--visual-target-topic", default="/tourism/visual_target")
+    parser.add_argument("--vision-nav", action="store_true", help="enable vision-triggered navigation")
+    parser.add_argument("--vision-nav-interval", type=float, default=1.0)
+    parser.add_argument("--vision-nav-cooldown", type=float, default=20.0)
+    parser.add_argument("--vision-min-confidence", type=float, default=0.75)
     parser.add_argument("--method", choices=("sift", "orb"), default="orb")
     parser.add_argument("--prefilter", choices=("orb", "off"), default="orb")
     parser.add_argument("--min-confidence", type=float, default=0.0)

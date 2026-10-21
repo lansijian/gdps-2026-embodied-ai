@@ -24,6 +24,7 @@ class RosConfig:
     event_topic: str = "/tourism/guide_event"
     start_topic: str = "/tourism/start"
     health_topic: str = "/g1_nav/health"
+    visual_target_topic: str = "/tourism/visual_target"
     action_name: str = "/navigate_to_pose"
     action_wait_s: float = 20.0
 
@@ -57,6 +58,9 @@ class RosBridge:
         self._publisher = self._node.create_publisher(String, self.config.event_topic, 10)
         self._node.create_subscription(String, self.config.start_topic, self._on_start, 10)
         self._node.create_subscription(String, self.config.health_topic, self._on_health, 10)
+        self._node.create_subscription(
+            String, self.config.visual_target_topic, self._on_visual_target, 10
+        )
         self._executor = MultiThreadedExecutor(num_threads=2)
         self._executor.add_node(self._node)
         self._thread = threading.Thread(target=self._executor.spin, daemon=True)
@@ -101,6 +105,16 @@ class RosBridge:
             payload = {"mode": "tour"}
         self._events.put({"type": "start", "payload": payload})
 
+    def _on_visual_target(self, message) -> None:
+        """External perception module asks the guide to visit an exhibit."""
+
+        try:
+            payload = json.loads(message.data) if message.data else {}
+        except ValueError:
+            payload = {}
+        payload.setdefault("source", "external")
+        self._events.put({"type": "visual_target", "payload": payload})
+
     def _on_health(self, message) -> None:
         try:
             self.health = json.loads(message.data) if message.data else {}
@@ -117,6 +131,10 @@ class RosBridge:
         except queue.Empty:
             pass
         return events
+
+    # -- image source ------------------------------------------------------
+    def make_image_source(self, topic: str) -> "RosImageSource":
+        return RosImageSource(self._node, topic)
 
     # -- navigation action -------------------------------------------------
     def _ensure_action_client(self):
@@ -190,4 +208,67 @@ class RosBridge:
         self._goal_handle = None
 
 
-__all__ = ["RosConfig", "RosBridge"]
+class RosImageSource:
+    """Latest-frame adapter over a sensor_msgs/Image topic (BEST_EFFORT)."""
+
+    def __init__(self, node, topic: str) -> None:
+        from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+        from sensor_msgs.msg import Image
+
+        qos = QoSProfile(
+            depth=1,
+            history=HistoryPolicy.KEEP_LAST,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
+        self.node = node
+        self.topic = topic
+        self._latest = None
+        self._subscription = node.create_subscription(Image, topic, self._on_image, qos)
+
+    def start(self) -> None:
+        return None
+
+    def _on_image(self, message) -> None:
+        self._latest = message
+
+    def read(self):
+        message = self._latest
+        if message is None:
+            return None
+        self._latest = None
+        try:
+            import cv2
+            import numpy as np
+
+            encoding = str(message.encoding or "").lower()
+            channels = {"mono8": 1, "rgb8": 3, "bgr8": 3, "rgba8": 4, "bgra8": 4}.get(encoding)
+            if channels is None:
+                return None
+            dtype = np.uint8
+            stride = int(message.step)
+            raw = np.frombuffer(bytes(message.data), dtype=dtype)
+            rows = raw.reshape((int(message.height), stride // np.dtype(dtype).itemsize))
+            pixels = rows[:, : int(message.width) * channels]
+            if channels == 1:
+                gray = pixels.reshape((int(message.height), int(message.width)))
+                return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            image = pixels.reshape((int(message.height), int(message.width), channels))
+            if encoding == "rgb8":
+                return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if encoding == "rgba8":
+                return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
+            if encoding == "bgra8":
+                return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+            return image.copy()
+        except Exception:
+            return None
+
+    def release(self) -> None:
+        self._latest = None
+        try:
+            self.node.destroy_subscription(self._subscription)
+        except Exception:
+            pass
+
+
+__all__ = ["RosConfig", "RosBridge", "RosImageSource"]

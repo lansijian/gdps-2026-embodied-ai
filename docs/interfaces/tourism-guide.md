@@ -7,7 +7,8 @@
 ```text
 迎宾/主控 --START--> [tourism guide 进程] --/navigate_to_pose(Nav2 Action)--> g1_nav2_ws 导航栈
                          |  <- 到达/失败（Action result）
-                         |  -> 相机识别（tracks/cultural-tourism/gdps_tourism/matching）
+                         |  <- /tourism/visual_target（视觉模块/语音模块识别到展品，触发导航）
+                         |  -> 相机识别（/dev/video* 或 ROS 图像话题，tracks/cultural-tourism/gdps_tourism/matching）
                          |  -> 豆包实时语音（session.update + 预置讲解词 + Function Calling）
                          |  -> 游客意图（FC: request_next_station / stop_narration / request_recommendation）
                          +--/tourism/guide_event(String JSON)--> 导航组/主控（END 信号）
@@ -27,6 +28,27 @@
 | `FINISHED` | 全部站点讲完 | `reason` | 主控收尾 |
 
 `reason` 取值：`visitor_next_request` / `narration_stopped` / `listen_timeout` / `tour_complete` / `operator_stop`。
+
+### 2.1 输入：视觉触发导航（新需求）
+
+语音和视觉都可以触发"去某展品点位讲解"：
+
+- **语音**：豆包 FC `request_next_station(target_name=...)` → `StationBook.resolve_target()` → NavigateToPose；
+- **视觉（外部）**：任意感知模块发 `/tourism/visual_target`（std_msgs/String JSON）：
+  ```json
+  {"exhibit_id": "EXH_001", "confidence": 0.88, "source": "perception_node"}
+  ```
+- **视觉（内部）**：guide 节点开 `--vision-nav` 后，在迎宾/聆听状态每 `--vision-nav-interval` 秒识别一次；
+  命中展品且置信度 ≥ `--vision-min-confidence`、不是当前站、距上次触发 ≥ `--vision-nav-cooldown` 秒，
+  就结束当前讲解并导航到该展品所在站点，到点后用"命中展品"讲解（`pending_exhibit_id`）。
+
+行为语义（`TourFlow.on_visual_target`）：
+| 当前状态 | 行为 |
+| --- | --- |
+| 正在讲解/聆听/已到点，且目标就是当前站 | 直接在现站点讲解该展品 |
+| 正在讲解/聆听/迎宾，目标在别的站 | 发 END（reason=visual_target）→ 取消播报 → 导航到目标站 |
+| 正在导航中 | 转向新目标站（不发 END） |
+| 展品没有对应站点 | 只记日志，不导航 |
 
 ## 3. START 信号（待迎宾组确认）
 
@@ -103,6 +125,12 @@ python3 scripts/tourism/guide_node.py \
   --stations tracks/cultural-tourism/configs/stations.g1.yaml \
   --knowledge tracks/cultural-tourism/configs/knowledge_dialogue.json \
   --camera 0 --method orb --prefilter orb --greeting --log-dir logs/tourism
+
+# 相机走 ROS 图像话题（导航/相机模块发布，等队友给话题名后替换）
+python3 scripts/tourism/guide_node.py ... --image-topic /camera/color/image_raw
+
+# 开启"视觉识别到展品 -> 导航到该展品点位 -> 讲解"
+python3 scripts/tourism/guide_node.py ... --vision-nav --vision-min-confidence 0.75
 
 # 现场调试：不等 /tourism/start，直接开跑
 python3 scripts/tourism/guide_node.py ... --autostart

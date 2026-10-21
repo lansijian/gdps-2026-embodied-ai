@@ -143,6 +143,11 @@ class GuideOrchestrator:
         if action is not None:
             await self.execute([action])
 
+    async def on_visual_target(self, exhibit_id: str, confidence: float = 0.0, source: str = "vision") -> None:
+        """Vision module (or /tourism/visual_target) recognised an exhibit."""
+
+        await self.execute(self.flow.on_visual_target(exhibit_id, confidence, source))
+
     async def on_idle_timeout(self) -> None:
         await self.execute(self.flow.on_idle_timeout())
 

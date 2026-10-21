@@ -77,6 +77,16 @@ class StationBook:
         ordered = [self._by_id[sid] for sid in self.tour_order if sid in self._by_id]
         return ordered or list(self.stations)
 
+    def station_for_exhibit(self, exhibit_id: str) -> Optional[Station]:
+        """Station that hosts this exhibit (vision/voice triggered navigation)."""
+
+        if not exhibit_id:
+            return None
+        for station in self.stations:
+            if exhibit_id in station.exhibit_ids:
+                return station
+        return None
+
     def station_for_route_exhibit(self, exhibit_id: str) -> Optional[Station]:
         if not exhibit_id:
             return None
