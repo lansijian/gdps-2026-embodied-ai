@@ -21,8 +21,9 @@ DEFAULT_PERSONA = (
 )
 
 DEFAULT_RULES = (
-    "【安全与礼仪】不进入禁区、不触碰展品、不催促游客、不奔跑。"
-    "回答只依据下面的场景资料，资料没有的内容明确说“这个我暂时不确定，可以帮您问服务台”，禁止编造年份、人名、价格。"
+    "【安全与礼仪】不进入禁区、不触碰展品、不催促游客、不奔跑。\n"
+    "【P1 问答规范】先用一句话给结论，最多再补一句细节，不读长列表；资料里没有的事实、价格、场次、临时活动一律不猜，"
+    "用下面的拒答话术并建议咨询一层服务台或拨打电话；涉及政治敏感、未公开信息和他人隐私，礼貌拒答并引导回展品与参观服务。"
 )
 
 TOOLS: List[Dict[str, Any]] = [
@@ -66,23 +67,42 @@ TOOLS: List[Dict[str, Any]] = [
 
 @dataclass
 class DialogueKnowledge:
-    """P1 facts + P5 recommendations injected into every scene."""
+    """P1 facts / FAQ + P5 recommendations injected into every scene."""
 
     venue_facts: Dict[str, List[str]] = field(default_factory=dict)
+    faq: List[Dict[str, str]] = field(default_factory=list)
+    refusal_rules: List[str] = field(default_factory=list)
     recommendations: List[str] = field(default_factory=list)
-    refusal_text: str = "这个我暂时不确定，可以帮您问服务台。"
+    refusal_text: str = "这个我暂时不确定，可以帮您问服务台，或者打 021-23299999 咨询。"
     safety_notes: List[str] = field(default_factory=list)
+    hotwords: List[str] = field(default_factory=list)
+    sources: List[Dict[str, str]] = field(default_factory=list)
+    verified: str = "unknown"
 
     @classmethod
     def load(cls, path: Optional[Path]) -> "DialogueKnowledge":
         if path is None or not Path(path).is_file():
             return cls()
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        meta = payload.get("meta") or {}
+        faq = [
+            {"q": str(item.get("q") or ""), "a": str(item.get("a") or ""), "category": str(item.get("category") or "")}
+            for item in payload.get("faq") or []
+            if item.get("q") and item.get("a")
+        ]
         return cls(
             venue_facts={str(k): [str(x) for x in v] for k, v in (payload.get("venue_facts") or {}).items()},
+            faq=faq,
+            refusal_rules=[str(x) for x in payload.get("refusal_rules") or []],
             recommendations=[str(x) for x in payload.get("recommendations") or []],
             refusal_text=str(payload.get("refusal_text") or cls().refusal_text),
             safety_notes=[str(x) for x in payload.get("safety_notes") or []],
+            hotwords=[str(x) for x in payload.get("hotwords") or []],
+            sources=[
+                {"title": str(item.get("title") or ""), "url": str(item.get("url") or "")}
+                for item in meta.get("sources") or []
+            ],
+            verified=str(meta.get("verified") or "unknown"),
         )
 
     def facts_text(self) -> str:
@@ -92,6 +112,20 @@ class DialogueKnowledge:
         for category, facts in self.venue_facts.items():
             for fact in facts:
                 lines.append("- %s：%s" % (category, fact))
+        return "\n".join(lines)
+
+    def faq_text(self, max_items: int = 12) -> str:
+        if not self.faq:
+            return ""
+        lines = []
+        for item in self.faq[:max_items]:
+            lines.append("- 问：%s 答：%s" % (item["q"], item["a"]))
+        return "\n".join(lines)
+
+    def refusal_rules_text(self) -> str:
+        lines = ["拒答话术：%s" % self.refusal_text]
+        for rule in self.refusal_rules:
+            lines.append("- %s" % rule)
         return "\n".join(lines)
 
     def recommendations_text(self) -> str:
@@ -145,6 +179,10 @@ def build_station_scene(
     if station.route_brief:
         blocks.append("【沿途简讲】%s" % station.route_brief)
     blocks.append("【场馆资料（P1 问询依据）】\n" + knowledge.facts_text())
+    faq = knowledge.faq_text(8)
+    if faq:
+        blocks.append("【常见问询速查（优先按这里回答）】\n" + faq)
+    blocks.append("【拒答规则】\n" + knowledge.refusal_rules_text())
     blocks.append("【周边推荐（P5）】\n" + knowledge.recommendations_text())
     blocks.append(
         "【结束规则】游客说“好的/谢谢/请前往下一个目标点/带我去下一个点”时，立即调用 request_next_station 工具；"
@@ -172,6 +210,8 @@ def build_route_scene(
         "【当前场景】您正陪游客在馆内行走，%s。" % destination,
         "【行为要求】行走中只做简短交流；游客问展品/馆情按资料回答，不要长篇大论。",
         "【场馆资料（P1 问询依据）】\n" + knowledge.facts_text(),
+        "【常见问询速查（P1）】\n" + (knowledge.faq_text(15) or "（无）"),
+        "【拒答规则】\n" + knowledge.refusal_rules_text(),
         "【周边推荐（P5）】\n" + knowledge.recommendations_text(),
         "【结束规则】游客表达“去下一个点/带我去某处/停下”时，必须调用 request_next_station 或 stop_narration。",
     ]
@@ -194,6 +234,8 @@ def build_greeting_scene(
         "【当前场景】游客刚来到面前，请主动打招呼，并用一两句话确认需求："
         "是想整体参观、重点看某件展品，还是先问一些参观信息。",
         "【场馆资料（P1 问询依据）】\n" + knowledge.facts_text(),
+        "【常见问询速查（P1）】\n" + (knowledge.faq_text(8) or "（无）"),
+        "【拒答规则】\n" + knowledge.refusal_rules_text(),
         "【结束规则】游客说出目的地或“开始吧”时，调用 request_next_station 并填写 target_name（没提就留空）。",
     ]
     return SceneText(instructions=_truncate("\n\n".join(blocks), budget), tools=[dict(tool) for tool in TOOLS])

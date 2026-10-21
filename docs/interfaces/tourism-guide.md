@@ -80,7 +80,14 @@ Function Calling 定义（3 个）：`request_next_station`、`stop_narration`�
 
 ## 6. P1/P2/P3/P5 映射
 
-- **P1 四类问答**：`configs/knowledge_dialogue.example.json` 的 `venue_facts`（馆情/建筑/庭院服务/参观建议）+ 拒答话术；
+- **P1 四类问答**：`configs/knowledge_dialogue.json`（真实版，2026-10-21 自主构建，`meta.verified=partial`）
+  - `venue_facts` 四类（场馆基本信息 / 建筑导览 / 庭院服务 / 参观建议）；
+  - `faq` 15 条高频问询（开门时间/门票/交通/存包/轮椅/拍照/宠物/必看/时长…），场景注入时优先按 FAQ 回答；
+  - `refusal_text` + `refusal_rules`（超范围、价格优惠、敏感信息统一拒答并引导服务台 021-23299999）；
+  - `hotwords`（馆名/建筑/镇馆之宝等）合并进豆包 ASR 热词；
+  - `meta.sources` 5 条公开来源（官网参观须知/服务须知、楼层导览、文汇报建筑史、官方庭院活动公告、2025 观众攻略）；
+  - `meta.pending_verification` 6 项待现场核对（文创/咖啡营业、母婴室与洗手间位置、免费讲解场次、VR 租赁、庭院开放、预约政策），核对后把 `verified` 改为 `true`；
+  - 配置自检：`check_tourism_config.py` 会检查四类是否齐全、FAQ≥10、拒答话术/规则、来源≥2，并提示 partial 状态；
 - **P2 无坐标指令**：FC `request_next_station.target_name` → `StationBook.resolve_target()` → 可达性/ETA 回答 + 导航；
 - **P3 沿途讲解**：行进中低频识别地标（`kind=landmark`），`TourFlow.on_landmark()` 保证每次经过只讲一句、且与上一句间隔 ≥ `brief_gap_s`；
 - **P5 周边推荐**：`knowledge_dialogue.recommendations` + FC `request_recommendation`。
@@ -139,7 +146,8 @@ python3 scripts/tourism/guide_rehearsal.py \
 ## 9. 待补（不阻塞联调）
 
 - 站点真实坐标与环线顺序（现场建图后）；
-- P1 权威资料（开放时间/票务/设施）、文创馆内容、周边 POI 清单（现有占位数据已在文件里标注 verified=false）；
+- P1 已按公开资料自主构建（knowledge_dialogue.json，verified=partial），只剩 meta.pending_verification 6 项需馆方/现场核对；
+- 文创馆商品清单、周边 POI 的实时信息（票价/营业时间）仍需权威源；
 - 豆包 API Key 与现场网络；
 - 讲解词长/短两版审核（长讲解取 `knowledge_base.json` 的 `narration`，沿途一句话取 `stations.route_brief`）。
 ## 10. 节点运行方式（占位版已可跑 dry-run）

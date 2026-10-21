@@ -122,12 +122,23 @@ def check(
     dialogue = _load_json(dialogue_path)
     if dialogue is not None:
         meta = dialogue.get("meta") or {}
-        if not meta.get("verified"):
-            report.warn("dialogue knowledge is still a placeholder (meta.verified=false)")
+        verified = meta.get("verified")
+        if verified in (None, False, "false", "no", "unknown"):
+            report.warn("dialogue knowledge is still a placeholder (meta.verified=%r)" % (verified,))
+        elif verified == "partial":
+            report.note("dialogue knowledge verified=partial (pending_verification filled in file)")
         facts = dialogue.get("venue_facts") or {}
         for category in P1_CATEGORIES:
             if category not in facts:
                 report.warn("P1 category missing: %s" % category)
+        if not dialogue.get("refusal_text"):
+            report.warn("P1 refusal_text missing (out-of-scope answers must decline)")
+        if len(dialogue.get("refusal_rules") or []) < 2:
+            report.warn("P1 refusal_rules is short (<2)")
+        if len(dialogue.get("faq") or []) < 10:
+            report.warn("P1 FAQ is short (<10 Q&A pairs)")
+        if len(meta.get("sources") or []) < 2:
+            report.warn("P1 sources missing (<2 URLs) - facts must be traceable")
         if len(dialogue.get("recommendations") or []) < 3:
             report.warn("P5 recommendation list is short (<3)")
     else:
@@ -174,16 +185,27 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Validate tourism guide configuration")
     parser.add_argument("--stations", default=str(TOURISM_ROOT / "configs" / "stations.example.yaml"))
     parser.add_argument("--knowledge", default=None, help="knowledge_base.json")
-    parser.add_argument("--dialogue", default=str(TOURISM_ROOT / "configs" / "knowledge_dialogue.example.json"))
+    parser.add_argument(
+        "--dialogue",
+        default=None,
+        help="dialogue KB (default: knowledge_dialogue.json, then example)",
+    )
     parser.add_argument("--templates", default=None)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--json-out", default=None)
     args = parser.parse_args(argv)
 
+    dialogue_path = Path(args.dialogue) if args.dialogue else None
+    if dialogue_path is None:
+        for name in ("knowledge_dialogue.json", "knowledge_dialogue.example.json"):
+            candidate = TOURISM_ROOT / "configs" / name
+            if candidate.is_file():
+                dialogue_path = candidate
+                break
     report = check(
         Path(args.stations),
         knowledge_path=Path(args.knowledge) if args.knowledge else None,
-        dialogue_path=Path(args.dialogue) if args.dialogue else None,
+        dialogue_path=dialogue_path,
         templates_dir=Path(args.templates) if args.templates else None,
         manifest_path=Path(args.manifest) if args.manifest else None,
     )

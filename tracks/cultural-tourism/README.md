@@ -84,6 +84,7 @@ python3 scripts/tourism/match_webcam.py --templates "$GDPS_TOURISM_TEMPLATES" \
 - `orchestrator.py` + `ros2_adapters.py`：标准 Nav2 `NavigateToPose`、`/tourism/guide_event`（END）、`/tourism/start`、ROS 图像话题；
 - `doubao_realtime.py`：豆包端到端实时语音（session.update 换场景、response.cancel 打断、Function Calling、预置讲解词原样朗读）；
 - `budget.py`：30 分钟任务预算（讲解超时自动推进）；
+- `configs/knowledge_dialogue.json`：P1 四类问答 + 15 条 FAQ + 拒答规则 + P5 推荐（公开资料自主构建，meta.verified=partial，待现场核对 6 项）；
 - `offline_audio.py` + `scripts/tourism/prepare_fallback_audio.py`：断网/额度用尽时本地 wav 兜底；
 - 接口契约：`docs/interfaces/tourism-guide.md`；沿途讲解分段表：`docs/deployment/2026-10-21-tourism-route-briefs.md`。
 

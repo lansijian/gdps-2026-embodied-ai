@@ -52,6 +52,19 @@ python3 scripts/tourism/check_tourism_config.py \
 
 - [ ] `errors=0`；警告逐项确认（占位坐标、P1 资料未核实、简讲过长）。
 
+## 3.5 P1 资料现场核对（10 分钟）
+
+打开 `tracks/cultural-tourism/configs/knowledge_dialogue.json`，逐项核对 `meta.pending_verification`：
+
+- [ ] 文创商店/咖啡厅当前是否营业、位置；
+- [ ] 母婴室、各楼层洗手间位置；
+- [ ] 免费定时讲解当日场次；
+- [ ] VR 眼镜/讲解器租赁价格与押金；
+- [ ] 庭院是否开放、有无围挡；
+- [ ] 预约政策是否仍为公众号实名预约。
+
+核对完把 `meta.verified` 改为 `true`，并跑一次配置自检（`check_tourism_config.py`）确认 P1 不再提示 partial。
+
 ## 4. guide dry-run（不发任何运动）
 
 ```bash

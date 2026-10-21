@@ -143,9 +143,21 @@ def _tool_reply(tool, flow: TourFlow, knowledge: DialogueKnowledge, book: Statio
     return "已执行。"
 
 
+def _resolve_knowledge_path(value: Optional[str]) -> Optional[Path]:
+    """Use the real dialogue KB when present, fall back to the example."""
+
+    if value:
+        return Path(value)
+    for name in ("knowledge_dialogue.json", "knowledge_dialogue.example.json"):
+        candidate = TOURISM_ROOT / "configs" / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 async def async_main(args: argparse.Namespace) -> int:
     book = StationBook.load(Path(args.stations))
-    knowledge = DialogueKnowledge.load(Path(args.knowledge) if args.knowledge else None)
+    knowledge = DialogueKnowledge.load(_resolve_knowledge_path(args.knowledge))
     exhibit_kb = load_knowledge_base(Path(args.templates)) if args.templates else None
 
     camera = None
@@ -198,8 +210,13 @@ async def async_main(args: argparse.Namespace) -> int:
             ros=ros,
         )
         audio = NullAudioIO() if args.null_audio else G1AudioIO(volume=args.volume)
+        hotwords: List[str] = []
+        for word in (exhibit_kb.hotwords if exhibit_kb else []) + knowledge.hotwords:
+            text = str(word).strip()
+            if text and text not in hotwords:
+                hotwords.append(text)
         client = DoubaoRealtimeClient(
-            DoubaoConfig(voice=args.voice, hotwords=(exhibit_kb.hotwords[:80] if exhibit_kb else [])),
+            DoubaoConfig(voice=args.voice, hotwords=hotwords[:100]),
             audio,
             on_event=None,
             on_error=lambda message: asyncio.ensure_future(_on_error(sink, message)),
@@ -462,7 +479,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         summary = asyncio.run(
             run_dry_tour(
                 Path(args.stations),
-                knowledge_path=Path(args.knowledge) if args.knowledge else None,
+                knowledge_path=_resolve_knowledge_path(args.knowledge),
                 out_json=Path(args.dry_run_out) if args.dry_run_out else None,
             )
         )

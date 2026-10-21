@@ -42,8 +42,15 @@ KNOWLEDGE = {
 }
 
 DIALOGUE = {
-    "meta": {"verified": True},
+    "meta": {
+        "verified": "partial",
+        "sources": [{"title": "官方", "url": "https://example.org/a"}, {"title": "攻略", "url": "https://example.org/b"}],
+        "pending_verification": [],
+    },
     "venue_facts": {category: ["事实"] for category in P1_CATEGORIES},
+    "faq": [{"q": "问%d" % i, "a": "答%d" % i, "category": "场馆基本信息"} for i in range(10)],
+    "refusal_text": "这个我不确定，可以帮您问服务台。",
+    "refusal_rules": ["资料没有的不猜", "敏感问题礼貌拒答"],
     "recommendations": ["推荐1", "推荐2", "推荐3"],
 }
 
