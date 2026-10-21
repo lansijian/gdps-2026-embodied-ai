@@ -35,6 +35,7 @@ class CameraConfig:
     min_accept_confidence: float = 0.0
     image_topic: Optional[str] = None  # ROS 图像话题（优先于 /dev/video*，由导航/相机模块发布）
     flip: str = "none"  # G1 头部 RealSense 倒装: none | 180 | hflip | vflip
+    fast_reject_features: int = 200  # 低纹理帧(地面/墙面)快速拒识，G1 上节省约 150ms/帧
 
 
 class ExhibitCamera:
@@ -65,6 +66,7 @@ class ExhibitCamera:
             self._library,
             max_side=self.config.max_side,
             prefilter=self.config.prefilter,
+            fast_reject_features=self.config.fast_reject_features,
         )
         for info in self._library.templates:
             self._template_exhibit[info.template_id] = info.exhibit_id or info.template_id

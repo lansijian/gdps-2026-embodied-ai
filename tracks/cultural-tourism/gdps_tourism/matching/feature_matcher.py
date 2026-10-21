@@ -284,6 +284,7 @@ class ExhibitMatcher:
         confidence_full_margin: float = 0.50,
         top_k: int = 3,
         min_query_features: int = 10,
+        fast_reject_features: int = 0,
         prefilter: str = "orb",
         prefilter_top_k: int = 3,
         prefilter_size: int = 640,
@@ -324,6 +325,9 @@ class ExhibitMatcher:
         self.confidence_full_margin = float(confidence_full_margin)
         self.top_k = int(top_k)
         self.min_query_features = int(min_query_features)
+        # 地面/白墙等低特征画面：粗筛不确定且查询特征很少时直接拒识，
+        # 省掉一次全量精确扫描（G1 上约 150ms）。
+        self.fast_reject_features = int(fast_reject_features)
         # A shortlist-only answer must clear these to skip the exhaustive scan
         # when the coarse vote was uncertain (see _decisive).  The bar is high on
         # purpose: on the low-texture silver rubbing (EXH_014) the coarse vote is
@@ -583,6 +587,28 @@ class ExhibitMatcher:
             else:
                 scan_indices = list(self._scan_indices)
                 full_scan_used = True
+
+        if (
+            proposal is not None
+            and proposal.full_scan
+            and self.fast_reject_features > 0
+            and query_count < self.fast_reject_features
+        ):
+            return MatchResult(
+                best=None,
+                candidates=[],
+                accepted=False,
+                unknown_reason="too_few_features",
+                diagnostics=self._diagnostics(
+                    query_features=query_count,
+                    scanned_templates=0,
+                    full_scan_used=False,
+                    prefilter_ms=prefilter_ms,
+                    prefilter_reason=prefilter_reason,
+                    margin=0.0,
+                    started=started,
+                ),
+            )
 
         scored = self._scan(scan_indices, query_des, keypoints, query_width, query_height)
         best, candidates, accepted, reason, margin = self._evaluate(scored)

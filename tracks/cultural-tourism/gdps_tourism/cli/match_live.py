@@ -46,6 +46,7 @@ DEFAULT_MATCHER: Dict[str, Any] = {
     "confidence_full_ratio": 0.60,
     "confidence_full_margin": 0.50,
     "top_k": 3,
+    "fast_reject_features": 0,
     # Coarse ORB prefilter + exact-match shortlist (see docs/INTERFACE_CONTRACT_v1.md).
     "prefilter": "orb",
     "prefilter_top_k": 3,
@@ -252,6 +253,7 @@ def _build_matcher(templates_dir: str, matcher_cfg: Dict[str, Any]):
                 "prefilter": str(matcher_cfg["prefilter"]).lower(),
                 "prefilter_top_k": int(matcher_cfg["prefilter_top_k"]),
                 "dedupe": bool(matcher_cfg["dedupe"]),
+                "fast_reject_features": int(matcher_cfg.get("fast_reject_features", 0)),
             }
         ),
     )
