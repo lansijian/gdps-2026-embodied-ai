@@ -104,6 +104,24 @@ python3 scripts/tourism/guide_dryrun.py \
 4. 相机：导航栈不使用相机；若遥操作/图传占用 RealSense，请告知可用图像话题；
 5. `dry_run:=true` 时 guide 也走同一 Action（Nav2 正常返回 SUCCEEDED，只是速度桥不真动），便于联调。
 
+## 8.1 离线讲解兜底（网络/额度失败时）
+
+```bash
+# 开发机预生成（macOS 用 say，Linux 用 espeak-ng；产物不要提交进 git）
+python3 scripts/tourism/prepare_fallback_audio.py \
+  --knowledge /path/to/exhibit_templates/knowledge_base.json \
+  --stations tracks/cultural-tourism/configs/stations.example.yaml \
+  --out-dir assets/narration
+# 把 assets/narration 同步到机器人后：
+python3 scripts/tourism/guide_node.py ... --offline-audio-dir assets/narration
+# 或者完全离线：
+python3 scripts/tourism/guide_node.py ... --offline --offline-audio-dir assets/narration
+```
+
+- 生成 31 段 wav（22 段长讲解 + 9 段沿途简讲），16kHz/16bit，约 68MB；
+- 运行中豆包连接/合成失败会自动切到本地 wav（FallbackDialogue），导航与 END 信号不受影响；
+- 离线模式没有 ASR，游客语音意图不可用（降级为固定流程 + 超时自动推进）。
+
 ## 9. 待补（不阻塞联调）
 
 - 站点真实坐标与环线顺序（现场建图后）；

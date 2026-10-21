@@ -44,6 +44,7 @@ from gdps_tourism.guide.doubao_realtime import (
 from gdps_tourism.guide.budget import Budget
 from gdps_tourism.guide.flow import Action, ActionKind, FlowConfig, GuideState, TourFlow
 from gdps_tourism.guide.knowledge_base import load_knowledge_base
+from gdps_tourism.guide.offline_audio import FallbackDialogue, OfflineAudioDialogue
 from gdps_tourism.guide.orchestrator import GuideOrchestrator, OrchestratorConfig
 from gdps_tourism.guide.scene import DialogueKnowledge, build_greeting_scene
 from gdps_tourism.guide.stations import StationBook
@@ -203,9 +204,17 @@ async def async_main(args: argparse.Namespace) -> int:
             on_event=None,
             on_error=lambda message: asyncio.ensure_future(_on_error(sink, message)),
         )
+        offline = None
+        dialogue_port = DoubaoDialogueAdapter(client)
+        if args.offline_audio_dir:
+            offline = OfflineAudioDialogue.from_dir(args.offline_audio_dir)
+            offline.on_missing = lambda text: sink.emit(
+                Action(ActionKind.LOG, {"event": "offline_audio_missing", "text": text[:40]})
+            )
+            dialogue_port = FallbackDialogue(dialogue_port, offline)
         orchestrator = GuideOrchestrator(
             flow=flow,
-            dialogue=DoubaoDialogueAdapter(client),
+            dialogue=dialogue_port,
             navigator=RosNavigator(ros) if ros is not None else _NoopNavigator(),
             camera=camera,
             sink=sink,
@@ -234,7 +243,27 @@ async def async_main(args: argparse.Namespace) -> int:
 
         client._on_event = on_event
         greeting_scene = build_greeting_scene(knowledge=knowledge)
-        await client.connect(greeting_scene)
+        if offline is not None:
+            offline.on_finished = lambda: asyncio.ensure_future(orchestrator.on_speech_finished())
+        if args.offline:
+            if offline is None:
+                raise RuntimeError("--offline 需要同时给 --offline-audio-dir")
+            dialogue_port.degraded = True
+            sink.emit(Action(ActionKind.LOG, {"event": "offline_mode", "audio_dir": args.offline_audio_dir}))
+        else:
+            try:
+                await client.connect(greeting_scene)
+            except Exception as exc:
+                if offline is None:
+                    raise
+                dialogue_port.degraded = True
+                sink.emit(
+                    Action(
+                        ActionKind.LOG,
+                        {"event": "doubao_unavailable_offline_fallback", "error": str(exc)[:200]},
+                    )
+                )
+                print("[guide][warn] 豆包不可用，切换本地音频兜底：%s" % exc, file=sys.stderr, flush=True)
 
         started = asyncio.Event()
 
@@ -407,6 +436,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voice", default=None)
     parser.add_argument("--volume", type=int, default=100)
     parser.add_argument("--null-audio", action="store_true", help="no G1 speaker/mic (laptop tests)")
+    parser.add_argument("--offline-audio-dir", default=None, help="pre-generated fallback wav directory")
+    parser.add_argument("--offline", action="store_true", help="never connect to Doubao; use local wav only")
     parser.add_argument("--no-ros", action="store_true", help="no ROS bridge (debug without rclpy)")
     parser.add_argument("--autostart", action="store_true")
     parser.add_argument("--greeting", action="store_true", help="open with the P1 intake greeting")

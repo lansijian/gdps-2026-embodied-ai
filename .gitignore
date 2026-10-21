@@ -236,3 +236,5 @@ configs/g1/navigation/site.yaml
 
 # macOS
 .DS_Store
+# generated offline narration audio (see scripts/tourism/prepare_fallback_audio.py)
+assets/narration/
