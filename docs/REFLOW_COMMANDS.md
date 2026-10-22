@@ -1,8 +1,9 @@
 # 数据采集与上传指令手册（GDPS 2026 · S22 文旅导览 / S05 质检检测）
 
-> 版本 v1.0 · 2026-10-22
+> 版本 v1.1 · 2026-10-22
 > 配套：`reflow/README.md`、`docs/GUIDE_EVENTS_v1.md`、`docs/DATA_REFLOW_PLAN.md`
-> 适用：Mac 本机 + 宇树 G1 实机（`unitree@192.168.123.164`，DDS 网口 `eth0`）
+> 适用：**Mac 本机**操作（同时连着 G1 实机 `unitree@192.168.123.164`，DDS 网口 `eth0`）
+> 机器人内 Ubuntu 直接执行请看：[`ROBOT_UBUNTU_COMMANDS.md`](ROBOT_UBUNTU_COMMANDS.md)
 
 ---
 
